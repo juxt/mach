@@ -1,0 +1,35 @@
+{
+ hello (println "Hello World!")
+
+ hello2 #$ ["echo" "Hello!"]
+
+ src {dir "src"}
+
+ classes {dir "target/classes"
+          ;; Here novelty is defined directly, not via reference to dependencies
+          mach/novelty (mach.core/modified-since dir #ref [src dir])
+          mach/update! (do
+                         #$ ["mkdir -p" dir]
+                         #$$ ["javac -d" dir mach/novelty])}
+
+ sass {dir "sass"}
+
+ css {target "target/app.css"
+      mach/novelty (mach.core/modified-since target #ref [sass dir])
+      mach/update! (apply mach.core/sh (concat ["sassc"] mach/novelty [">" target]))}
+
+ jar {target "target/foo.jar"
+      mach/depends [classes css]
+      mach/novelty (concat
+                    (filter
+                     (partial mach.core/modified-since? (mach.core/last-modified target))
+                     #ref [classes dir])
+                    (filter
+                     (partial mach.core/modified-since? (mach.core/last-modified target))
+                     #ref [css target]))
+      mach/update! (if (mach.core/file-exists? target)
+                     #$$ ["jar uf" target mach/novelty]
+                     #$ ["jar cf" target #ref [classes dir]])}
+
+ clean (println "Cleaning project")
+ }

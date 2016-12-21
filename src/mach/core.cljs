@@ -1,3 +1,5 @@
+#!/home/malcolm/bin/lumo
+
 ;; Copyright © 2016, JUXT LTD.
 
 (ns mach.core
@@ -107,12 +109,13 @@
                    identity)))))
 
 (defn make [err input]
-  (if err
-    (println "ERROR")
-    (let [makefile (reader/read-string input)
-          makefile (postwalk (resolve-refs makefile) makefile)]
+  (let [target (symbol (first (drop 3 (.-argv nodejs/process))))]
+    (if err
+      (println "ERROR")
+      (let [makefile (reader/read-string input)
+            makefile (postwalk (resolve-refs makefile) makefile)]
 
-      (binding [cljs/*eval-fn* repl/caching-node-eval]
-        (step makefile 'hello2)))))
+        (binding [cljs/*eval-fn* repl/caching-node-eval]
+          (step makefile target))))))
 
 (.readFile fs "Makefile.edn" "utf-8" make)

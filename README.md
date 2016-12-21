@@ -31,31 +31,43 @@ Here, b.c and c.c might be source files. If either of them were newer
 than a.o, or if a.o didn't exist, then the command `cc -o a.o b.c c.c`
 would be run.
 
-Make was also very flexible, and could be used to build almost
+You could rewrite this make target using 'automatic variables' like this:
+
+```
+a.o:   b.c c.c
+       cc -o $@ $?
+```
+
+Make goes downhill rapidly from here, forcing you to learn a ton of
+stuff that nowadays looks and feels antiquated.
+
+But Make was very flexible, and could be used to build almost
 anything that could be expressed in dependency and target files.
 
-Unfortunately, make syntax was baroque. Make relied on using the shell
-whenever it needed to compute something, manipulate strings or lists,
-and even required tabs in the right places, and might silently fail if
-you forgot the rules.
+Unfortunately, make syntax was baroque. Make relied on unintuitive
+'features' whenever it needed to compute something, manipulate strings
+or lists, and even required tabs in the right places, and might
+silently fail if you forgot the rules.
 
 Make was also not designed for the hierarchical file system used by
 Java and others, and for this reason other tools such as Ant, Ivy,
 Maven and Gradle came along and supplanted Make. However, these tools
 tended to go back to the idea that it was good to build code from
 scratch, and people got used to the idea that it was OK to wait ages
-for something to build. Instead of fixing the problem, they hid the
-problem away by setting up out-of-sight build machines.
+for something to build. Instead of fixing the problem, they swept the
+problem away under an out-of-sight build machine or 'continuous
+integration' server, turning adversity into virtue.
 
 Then Clojure came along and people built things like Leiningen and
 boot. These suffer from painfully slow start-up times. Leiningen is
-really a Clojure launch tool rather than a build tool.
+really a Clojure launch tool rather than a build tool. Boot's name at
+least indicates what it's best for: booting a powerful development
+environment.
 
 ## Weakening abstraction
 
-Maven and Gradle take an opinionated
-view of how projects, Java project in particular, should be built,
-tested and released.
+Maven and Gradle take an opinionated view of how projects, Java
+project in particular, should be built, tested and released.
 
 I don't think it is the job of a build tool to encourage, let alone
 prescribe, a particular methodology in how projects should be
@@ -108,8 +120,6 @@ Your first Makefile.edn might be a very simple affair:
  hello (printn "Hello World!")
 }
 ```
-
-
 
 ## Differences with make
 
@@ -164,9 +174,15 @@ other parts of the Makefile.
 
 Mach sits on the extensive nodejs eco-system.
 
-## Acknowledgements
+## Influences
 
 Mach is influenced by the following:
 
 Make, particularly GNU Make
 Jake
+
+
+## Road map
+
+The goal of Mach is to create something that is capable of building
+complex systems as well as running them.

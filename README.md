@@ -77,7 +77,7 @@ built. That is the job for books and blog articles.
 
 Mach is a remake of make, striving to keep the good parts.
 
-### Sprechen Sie Deutsche?
+### Sprechen Sie Deutsch?
 
 Since you ask, the name is from the German verb, _machen_ (to do, to
 make), used in the imperative. Mach is as much about 'doing' as

@@ -21,6 +21,7 @@
 (reader/register-tag-parser! "ref" read-reference)
 
 (def fs (nodejs/require "fs"))
+(def child_process (nodejs/require "child_process"))
 
 (defn file-exists? [f]
   (.existsSync fs f))
@@ -41,6 +42,9 @@
 (defn dir? [f]
   (.. fs (lstatSync f) (isDirectory)))
 
+(defn file? [f]
+  (.. fs (lstatSync f) (isFile)))
+
 (defn file-seq [dir]
   (if (.existsSync fs dir)
     (tree-seq
@@ -51,7 +55,7 @@
 
 (defn modified-since [anchor source]
   (filter
-   (partial modified-since? (apply max (conj (map last-modified (filter dir? (file-seq anchor))) 0)))
+   (partial modified-since? (apply max (conj (map last-modified (filter file? (file-seq anchor))) 0)))
    (filter (comp not mach.core/dir?) (mach.core/file-seq source))))
 
 (defn resolve-keywords [expr scope]
@@ -62,7 +66,11 @@
             expr))
 
 (defn sh [& args]
-  (apply println "$" args))
+  (apply println "$" args)
+  (.spawnSync child_process
+              (first args)
+              (clj->js (rest args))
+              #js {"shell" true}))
 
 (defn ^:private read-shell [vals]
   `(sh ~@vals))
@@ -80,10 +88,10 @@
       (get-in makefile (:path x))
       x)))
 
-(defn step [makefile k]
+(defn step [makefile k message?]
   (let [v (get makefile k)
         _  (doseq [dep (get v 'mach/depends)]
-             (step makefile dep))
+             (step makefile dep false))
         novelty
         (when (get v 'mach/novelty)
           (:value
@@ -93,8 +101,9 @@
             identity)))]
 
     ;; Call update!
-    (when (or (nil? (get v 'mach/novelty))
-              (not-empty novelty))
+    (if (or (nil? (get v 'mach/novelty))
+              (true? novelty)
+              (when (seq? novelty) (not-empty novelty)))
       (let [code (resolve-keywords (if (map? v)
                                      (get v 'mach/update!)
                                      v)
@@ -106,7 +115,8 @@
                                      {}))]
         (cljs/eval repl/st
                    code
-                   identity)))))
+                   identity))
+      (when message? (println "Nothing to do!")))))
 
 (defn make [err input]
   (let [target (symbol (first (drop 3 (.-argv nodejs/process))))]
@@ -116,6 +126,6 @@
             makefile (postwalk (resolve-refs makefile) makefile)]
 
         (binding [cljs/*eval-fn* repl/caching-node-eval]
-          (step makefile target))))))
+          (step makefile target true))))))
 
 (.readFile fs "Makefile.edn" "utf-8" make)

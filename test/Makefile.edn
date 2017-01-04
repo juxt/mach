@@ -1,7 +1,7 @@
 {
  hello (println "Hello World!")
 
- hello2 #$ ["echo" "Hello!"]
+ hello2 #$ ["echo" "Hello" "World!"]
 
  src {dir "src"}
 
@@ -14,7 +14,12 @@
 
  sass {dir "sass"}
 
+ target {dir "target"
+         mach/novelty (not (mach.core/file-exists? dir))
+         mach/update! #$ ["mkdir" dir]}
+
  css {target "target/app.css"
+      mach/depends [target]
       mach/novelty (mach.core/modified-since target #ref [sass dir])
       mach/update! (apply mach.core/sh (concat ["sassc"] mach/novelty [">" target]))}
 
@@ -31,5 +36,6 @@
                      #$$ ["jar uf" target mach/novelty]
                      #$ ["jar cf" target #ref [classes dir]])}
 
- clean (println "Cleaning project")
+ clean (do (println "Cleaning project")
+           #$ ["rm" "-rf" "target"])
  }

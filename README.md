@@ -120,7 +120,7 @@ Your very first Makefile.edn might look like this:
 You can invoke Mach with the following:
 
 ```
-$ mach hello
+$ mach hallo
 ```
 
 ### Makefile syntax

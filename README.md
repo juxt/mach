@@ -213,27 +213,27 @@ map, you can put anything you like in this map, but keys with the
 
 A few of these keys are special:
 
-### mach/description
+### description
 
 A short string of descriptive text
 
 ```clojure
-{css {mach/description "CSS for the website, compiled from sass sources"}}
+{css {description "CSS for the website, compiled from sass sources"}}
 ```
 
-### mach/depends
+### depends
 
-The `mach/depends` entry contains a list of targets that must be
+The `depends` entry contains a list of targets that must be
 updated (if stale) prior to this target being considered for update.
 
 ```clojure
-{jar {mach/description "A jar file containing Java classes and CSS"
-      mach/depends [classes css]}}
+{jar {description "A jar file containing Java classes and CSS"
+      depends [classes css]}}
 ```
 
-A `mach/depends` is simply a sequence of targets to check.
+A `depends` is simply a sequence of targets to check.
 
-### mach/novelty
+### novelty
 
 Deciding whether a target is stale (requiring a re-build) or fresh (no
 re-build is necessary) might be a simple procedure or a complex
@@ -257,14 +257,14 @@ argument, the predicate returns true.
 For example:
 
 ```clojure
-{css {mach/novelty (mach.core/modified-since "target/app.css" "sass")}}
+{css {novelty (mach.core/modified-since "target/app.css" "sass")}}
 ```
 
 It is also possible to express this recipe like this:
 
 ```clojure
 {css {target "target/app.css"
-      mach/novelty (mach.core/modified-since target "sass")}}
+      novelty (mach.core/modified-since target "sass")}}
 ```
 
 This illustrates that symbols in ClojureScript expressions are
@@ -274,7 +274,7 @@ declarations, accessible from within local ClojureScript expressions
 and also exposed to other tools. These values are also accessible by
 other targets, via references (see below).
 
-### mach/update!
+### update!
 
 If novelty is detected, a target is updated by calling the `update!`
 function. The terminology here is intended to align with our
@@ -285,13 +285,13 @@ The `update!` expression must do whatever is necessary to rebuild
 
 ```clojure
 {css {target "target/app.css"
-      mach/novelty (mach.core/modified-since target #ref [sass dir])
-      mach/update! (apply mach.core/sh (concat ["sassc"] mach/novelty [">" target]))}}
+      novelty (mach.core/modified-since target #ref [sass dir])
+      update! (apply mach.core/sh (concat ["sassc"] novelty [">" target]))}}
 ```
 
 In the `update!` expression can be side-effecting (and should
 be!). Often, an `update!` expression will reference the value of
-`mach/novelty` to reduce work.
+`novelty` to reduce work.
 
 ## Calling out to the shell
 
@@ -322,7 +322,7 @@ Machfile, via the `#ref` tag literal.
 ```clojure
 {
 src {dir "src"}
-classes {mach/update! (compile #ref [src dir])}
+classes {update! (compile #ref [src dir])}
 }
 ```
 

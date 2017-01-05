@@ -90,28 +90,28 @@
 
 (defn step [makefile k message?]
   (let [v (get makefile k)
-        _  (doseq [dep (get v 'mach/depends)]
+        _  (doseq [dep (get v 'depends)]
              (step makefile dep false))
         novelty
-        (when (get v 'mach/novelty)
+        (when (get v 'novelty)
           (:value
            (cljs/eval
             repl/st
-            (resolve-keywords (get v 'mach/novelty) v)
+            (resolve-keywords (get v 'novelty) v)
             identity)))]
 
     ;; Call update!
-    (if (or (nil? (get v 'mach/novelty))
+    (if (or (nil? (get v 'novelty))
               (true? novelty)
               (when (seq? novelty) (not-empty novelty)))
       (let [code (resolve-keywords (if (map? v)
-                                     (get v 'mach/update!)
+                                     (get v 'update!)
                                      v)
                                    (if (map? v)
                                      (merge
                                       v
                                       ;; Already computed novelty
-                                      {'mach/novelty `(quote ~novelty)})
+                                      {'novelty `(quote ~novelty)})
                                      {}))]
         (cljs/eval repl/st
                    code

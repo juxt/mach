@@ -128,4 +128,4 @@
         (binding [cljs/*eval-fn* repl/caching-node-eval]
           (step makefile target true))))))
 
-(.readFile fs "Makefile.edn" "utf-8" make)
+(.readFile fs "Machfile.edn" "utf-8" make)

@@ -101,7 +101,7 @@ Symlink /path/to/mach/core.cljs to `mach`, somewhere in your path.
 
 Create a simple project and add a Machfile.edn file.
 
-Your very first Makefile.edn might look like this:
+Your very first Machfile.edn might look like this:
 
 ```clojure
 {
@@ -152,11 +152,11 @@ $ mach css
 If you have the SASS compiler installed, `sassc`, this will compile
 the sass files in `sass` to `target/app.css`.
 
-### Makefile syntax
+### Machfile syntax
 
-There is an example Makefile.edn in `test/`.
+There is an example Machfile.edn in `test/`.
 
-The Makefile.edn file contains a map between targets and target
+The Machfile.edn file contains a map between targets and target
 recipes.
 
 A recipe can be either an expression or map.
@@ -165,13 +165,13 @@ A recipe can be either an expression or map.
 
 ### EDN format
 
-Makefiles are data, and we have chosen the EDN format. If the only
+Machfiles are data, and we have chosen the EDN format. If the only
 reason EDN was better than JSON was because it allows comments, that
 would be reason enough to choose it. It has many other advantages
 though.
 
-The Makefile is a map, modelled in a similar fashion to the original
-Makefile, with targets as keys and dependencies/actions as values.
+The Machfile is a map, modelled in a similar fashion to the original
+Machfile, with targets as keys and dependencies/actions as values.
 
 ### Targets
 
@@ -198,7 +198,7 @@ novelty (i.e. whether a target is fresh or stale, and how so).
 
 ## Recipes
 
-Makefile entries have target names (the keys) and recipes (actions or
+Machfile entries have target names (the keys) and recipes (actions or
 maps which describe when and how to build the target). If you use a
 map, you can put anything you like in this map, but keys with the
 `mach` namespace are reserved.
@@ -309,7 +309,7 @@ defined in terms of other variables, and so on.
 Mach achieves DRY without endless indirection by using references (the
 same way [Aero](https://github.com/juxt/aero) does it) - key values
 can be declared in a recipe and referenced from other parts of the
-Makefile, via the `#ref` tag literal.
+Machfile, via the `#ref` tag literal.
 
 ```clojure
 {

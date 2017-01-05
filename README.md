@@ -89,7 +89,7 @@ consistent, expressive and powerful.
 Sorry to say, this library is in experimental alpha and you shouldn't
 use it, unless you really want to.
 
-## Usage
+## Install Mach
 
 Install [lumo](https://github.com/anmonteiro/lumo) globally:
 
@@ -98,6 +98,8 @@ $ npm install -g lumo-cljs
 ```
 
 Symlink /path/to/mach/core.cljs to `mach`, somewhere in your path.
+
+## Getting started
 
 Create a simple project and add a Machfile.edn file.
 

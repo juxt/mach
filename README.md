@@ -64,15 +64,6 @@ really a Clojure launch tool rather than a build tool. Boot's name at
 least indicates what it's best for: booting a powerful development
 environment.
 
-## Weakening abstraction
-
-Maven and Gradle take an opinionated view of how projects, Java
-project in particular, should be built, tested and released.
-
-I don't think it is the job of a build tool to encourage, let alone
-prescribe, a particular methodology in how projects should be
-built. That is the job for books and blog articles.
-
 ## Introducing Mach
 
 Mach is a remake of make, striving to keep the good parts.

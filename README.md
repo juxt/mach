@@ -128,7 +128,8 @@ Guten Tag, Welt!
 Clone the mach project.
 
 ```
-cd mach/test
+$ git clone https://github.com/juxt/mach
+$ cd mach/test
 ```
 
 Try the following:

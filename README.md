@@ -115,6 +115,12 @@ You can invoke Mach with the following:
 $ mach hallo
 ```
 
+to get the following output:
+
+```
+Guten Tag, Welt!
+```
+
 ### Try it out
 
 Clone the mach project.

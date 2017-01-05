@@ -338,9 +338,10 @@ quarter-million-plus modules available to you.
 ## Influences
 
 Mach is influenced by Make, particularly GNU Make, which has survived
-the test of time (but not without baggage). I also looked at Jake,
-which is a worthy re-implementation of Make, sticking close to the
-original.
+the test of time (but not without baggage).
+
+I also looked at Jake, which is a worthy re-implementation of Make,
+sticking close to the original.
 
 ## Road map
 

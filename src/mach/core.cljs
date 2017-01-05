@@ -1,4 +1,4 @@
-#!/home/malcolm/bin/lumo
+#!/usr/bin/lumo
 
 ;; Copyright © 2016, JUXT LTD.
 

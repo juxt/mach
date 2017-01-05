@@ -91,11 +91,15 @@ use it, unless you really want to.
 
 ## Usage
 
-Install [lumo](https://github.com/anmonteiro/lumo). Run with
+Install [lumo](https://github.com/anmonteiro/lumo) globally:
 
-Add a Makefile.edn file to your project.
+```
+$ npm install -g lumo-cljs
+```
 
 Symlink /path/to/mach/core.cljs to `mach`, somewhere in your path.
+
+Create a simple project and add a Machfile.edn file.
 
 Your very first Makefile.edn might look like this:
 

@@ -83,9 +83,6 @@ Since you ask, the name is from the German verb, _machen_ (to do, to
 make), used in the imperative. Mach is as much about 'doing' as
 'making', which the German verb captures well.
 
-It is also named after Austrian physicist, Ernst Mach, who's name is
-given to the Mach number, which evokes speed.
-
 ### Design goals
 
 - Fast start-up (ideally sub-second)

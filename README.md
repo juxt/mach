@@ -86,8 +86,8 @@ consistent, expressive and powerful.
 
 ### Status
 
-Sorry to say, this library is in experimental alpha and you shouldn't
-use it, unless you really want to.
+Mach is in alpha status. You are encouraged to use it if you are
+prepared to accept some changes if you upgrade.
 
 ## Install Mach
 

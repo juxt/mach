@@ -115,6 +115,43 @@ You can invoke Mach with the following:
 $ mach hallo
 ```
 
+### Try it out
+
+Clone the mach project.
+
+```
+cd mach/test
+```
+
+Try the following:
+
+```
+$ mach target
+```
+
+This creates a directory called `target`.
+
+Try again.
+
+```
+$ mach target
+```
+
+Since `target` already exists, you should get the following output:
+
+```
+Nothing to do!
+```
+
+Now try this:
+
+```
+$ mach css
+```
+
+If you have the SASS compiler installed, `sassc`, this will compile
+the sass files in `sass` to `target/app.css`.
+
 ### Makefile syntax
 
 There is an example Makefile.edn in `test/`.

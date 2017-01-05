@@ -113,7 +113,7 @@ Your very first Makefile.edn might look like this:
 
 ```clojure
 {
- hallo (printn "Guten Tag, Welt!")
+ hallo (println "Guten Tag, Welt!")
 }
 ```
 

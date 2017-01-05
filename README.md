@@ -163,10 +163,9 @@ the sass files in `sass` to `target/app.css`.
 
 ### Machfile syntax
 
-There is an example Machfile.edn in `test/`.
+Examine the file `Machfile.edn` in `test/`.
 
-The Machfile.edn file contains a map between targets and target
-recipes.
+This contains a map between targets and target recipes.
 
 A recipe can be either an expression or map.
 

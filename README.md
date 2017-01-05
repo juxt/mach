@@ -94,7 +94,7 @@ prepared to accept some changes if you upgrade.
 Install [lumo](https://github.com/anmonteiro/lumo) globally:
 
 ```
-$ npm install -g lumo-cljs
+$ sudo npm install -g lumo-cljs
 ```
 
 Symlink /path/to/mach/core.cljs to `mach`, somewhere in your path.

@@ -7,7 +7,8 @@
             [cljs.reader :as reader]
             [cljs.js :as cljs]
             [lumo.repl :as repl]
-            [clojure.walk :refer [postwalk]]))
+            [clojure.walk :refer [postwalk]]
+            [clojure.string :as str]))
 
 (defonce ^:private st (cljs/empty-state))
 
@@ -67,10 +68,12 @@
 
 (defn sh [& args]
   (apply println "$" args)
-  (.spawnSync child_process
-              (first args)
-              (clj->js (rest args))
-              #js {"shell" true}))
+  (let [result (.spawnSync child_process
+                           (first args)
+                           (clj->js (map (comp #(str/replace % "'" "\\'")
+                                               #(str/replace % "|" "\\|")) (rest args)
+                                         ))
+                           #js {"shell" true})]))
 
 (defn ^:private read-shell [vals]
   `(sh ~@vals))
@@ -82,50 +85,51 @@
 
 (reader/register-tag-parser! "$$" read-shell-apply)
 
-(defn resolve-refs [makefile]
+(defn resolve-refs [machfile]
   (fn [x]
     (if (instance? Reference x)
-      (get-in makefile (:path x))
+      (get-in machfile (:path x))
       x)))
 
-(defn step [makefile k message?]
-  (let [v (get makefile k)
-        _  (doseq [dep (get v 'depends)]
-             (step makefile dep false))
-        novelty
-        (when (get v 'novelty)
-          (:value
-           (cljs/eval
-            repl/st
-            (resolve-keywords (get v 'novelty) v)
-            identity)))]
+(defn step [machfile k message?]
+  (if-let [v (get machfile k)]
+    (do
+      (doseq [dep (get v 'depends)]
+        (step machfile dep false))
+      (let [novelty (when (get v 'novelty)
+                      (:value
+                       (cljs/eval
+                        repl/st
+                        (resolve-keywords (get v 'novelty) v)
+                        identity)))]
 
-    ;; Call update!
-    (if (or (nil? (get v 'novelty))
-              (true? novelty)
-              (when (seq? novelty) (not-empty novelty)))
-      (let [code (resolve-keywords (if (map? v)
-                                     (get v 'update!)
-                                     v)
-                                   (if (map? v)
-                                     (merge
-                                      v
-                                      ;; Already computed novelty
-                                      {'novelty `(quote ~novelty)})
-                                     {}))]
-        (cljs/eval repl/st
-                   code
-                   identity))
-      (when message? (println "Nothing to do!")))))
+        ;; Call update!
+        (if (or (nil? (get v 'novelty))
+                (true? novelty)
+                (when (seq? novelty) (not-empty novelty)))
+          (let [code (resolve-keywords (if (map? v)
+                                         (get v 'update!)
+                                         v)
+                                       (if (map? v)
+                                         (merge
+                                          v
+                                          ;; Already computed novelty
+                                          {'novelty `(quote ~novelty)})
+                                         {}))]
+            (cljs/eval repl/st
+                       code
+                       identity))
+          (when message? (println "Nothing to do!")))))
+    (println "No target:" k)))
 
-(defn make [err input]
+(defn mach [err input]
   (let [target (symbol (first (drop 3 (.-argv nodejs/process))))]
     (if err
       (println "ERROR")
-      (let [makefile (reader/read-string input)
-            makefile (postwalk (resolve-refs makefile) makefile)]
+      (let [machfile (reader/read-string input)
+            machfile (postwalk (resolve-refs machfile) machfile)]
 
         (binding [cljs/*eval-fn* repl/caching-node-eval]
-          (step makefile target true))))))
+          (step machfile target true))))))
 
-(.readFile fs "Machfile.edn" "utf-8" make)
+(.readFile fs "Machfile.edn" "utf-8" mach)

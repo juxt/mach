@@ -1,0 +1,32 @@
+{
+  "name": "@juxt/mach",
+  "version": "1.0.0",
+  "description": "A remake of make",
+  "main": "index.js",
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "bin": {
+    "mach": "src/mach/core.cljs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/juxt/mach.git"
+  },
+  "keywords": [
+    "make",
+    "build"
+  ],
+  "author": "Malcolm Sparks",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/juxt/mach/issues"
+  },
+  "homepage": "https://github.com/juxt/mach#README.md",
+  "dependencies": {
+    "lumo-cljs": "1.0.0"
+  }
+}

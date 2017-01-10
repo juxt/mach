@@ -91,13 +91,11 @@ prepared to accept some changes if you upgrade.
 
 ## Install Mach
 
-Install [lumo](https://github.com/anmonteiro/lumo) globally:
+Install Mach with NPM like this
 
 ```
-$ sudo npm install -g lumo-cljs
+$ sudo npm install -g @juxt/mach
 ```
-
-Symlink /path/to/mach/core.cljs to `mach`, somewhere in your path.
 
 ## Getting started
 

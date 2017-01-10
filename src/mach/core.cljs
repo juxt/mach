@@ -1,6 +1,6 @@
 #!/usr/bin/lumo
 
-;; Copyright © 2016, JUXT LTD.
+;; Copyright © 2016-2017, JUXT LTD.
 
 (ns mach.core
   (:require [cljs.nodejs :as nodejs]

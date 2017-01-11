@@ -61,7 +61,9 @@
 (defn modified-since [anchor source]
   (filter
    (partial modified-since? (apply max (conj (map last-modified (filter file? (file-seq anchor))) 0)))
-   (filter (comp not mach.core/dir?) (mach.core/file-seq source))))
+   (filter (comp not mach.core/dir?) (if (coll? source)
+                                       (mapcat mach.core/file-seq source)
+                                       (mach.core/file-seq source)))))
 
 (defn resolve-keywords [expr scope]
   (postwalk (fn [x]

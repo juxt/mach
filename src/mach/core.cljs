@@ -229,3 +229,6 @@
     (get-in-ref
      (binding [r/*default-data-reader-fn* (partial reader opts)]
        (r/read-string (.readFileSync fs source "utf-8"))))))
+
+(defn spit [f data]
+  (.writeFileSync fs f data))

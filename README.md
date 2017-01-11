@@ -87,7 +87,8 @@ consistent, expressive and powerful.
 ### Status
 
 Mach is in alpha status. You are encouraged to use it if you are
-prepared to accept some changes if you upgrade.
+prepared to accept some changes if you upgrade. The design of Mach is
+likely to change in the near future.
 
 ## Install Mach
 

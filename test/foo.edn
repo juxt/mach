@@ -1,1 +1,2 @@
-{:a #custom "a"}
+{:a #custom "a"
+ :b "whizz"}

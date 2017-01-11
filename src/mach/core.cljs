@@ -3,12 +3,16 @@
 ;; Copyright © 2016-2017, JUXT LTD.
 
 (ns mach.core
-  (:require [cljs.nodejs :as nodejs]
-            [cljs.reader :as reader]
-            [cljs.js :as cljs]
-            [lumo.repl :as repl]
-            [clojure.walk :refer [postwalk]]
-            [clojure.string :as str]))
+  (:require
+   [cljs.nodejs :as nodejs]
+   [cljs.pprint :as pprint]
+   [cljs.reader :as reader]
+   [clojure.walk :refer [postwalk]]
+   [cljs.tools.reader :as r]
+   [cljs.js :as cljs]
+   [lumo.repl :as repl]
+   [clojure.walk :refer [postwalk]]
+   [clojure.string :as str]))
 
 (defonce ^:private st (cljs/empty-state))
 
@@ -134,23 +138,77 @@
 
 (.readFile fs "Machfile.edn" "utf-8" mach)
 
-(defn act [err input]
-  (if err
-    (println "input error")
-    (println "Read input ok:" (reader/read-string input))))
+;; Aero support This is mostly just copy-and-paste from Aero code When
+;; I've worked out how to include other cljs namespaces into a
+;; lumo-based product, or even reference aero as a dependency, then
+;; I'm sure JUXT will produce a cljs version of Aero we can use
+;; directly. Still 'early days' here.
 
-(defn config []
-  (println "Testing")
-  #_(.readFile fs "/home/malcolm/src/kermit/resources/config.edn" "utf-8" act)
-  (.readFile fs "foo.edn" "utf-8" act)
-  )
+(declare read-config)
 
-(def profile :prod)
+(defmulti reader (fn [opts tag value] tag))
 
-(defn read-profile [value]
-  (println "Reading" value)
-  "hi")
+(defmethod reader :default
+  [_ tag value]
+  (throw (ex-info (str "No reader for tag: " tag) {:tag tag :value value})))
 
-(reader/register-tag-parser!
- "custom"
- read-profile)
+(defmethod reader 'env
+  [opts tag value]
+  (aget js/process.env value))
+
+(defmethod reader 'profile
+  [{:keys [profile]} tag value]
+  (cond (contains? value profile) (get value profile)
+        (contains? value :default) (get value :default)
+        :otherwise nil))
+
+(defmethod reader 'user
+  [{:keys [user]} tag value]
+  (let [user (or user js/process.env.USER)]
+    (or
+     (some (fn [[k v]]
+             (when (or (= k user)
+                       (and (set? k) (contains? k user)))
+               v))
+           value)
+     (get value :default))))
+
+(defmethod reader 'include
+  [{:keys [resolver source] :as opts} tag value]
+  (read-config
+   (if (map? resolver)
+     (get resolver value)
+     (resolver source value))
+   opts))
+
+(defmethod reader 'join
+  [opts tag value]
+  (apply str value))
+
+(defmethod reader 'aws-kms-decrypt
+  [opts tag value]
+  "XXX")
+
+(defn- get-in-ref
+  [config]
+  (letfn [(get-in-conf [m]
+            (postwalk
+             (fn [v]
+               (if-not (contains? (meta v) :ref)
+                 v
+                 (get-in-conf (get-in config v))))
+             m))]
+    (get-in-conf config)))
+
+(def default-opts
+  {:profile :default
+   :resolver (fn [source include]
+               (if (.startsWith include "/")
+                 include
+                 (str source include)))})
+
+(defn read-config [source given-opts]
+  (let [opts (merge default-opts given-opts {:source source})]
+    (get-in-ref
+     (binding [r/*default-data-reader-fn* (partial reader opts)]
+       (r/read-string (.readFileSync fs source "utf-8"))))))

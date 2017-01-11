@@ -38,4 +38,6 @@
 
  clean (do (println "Cleaning project")
            #$ ["rm" "-rf" "target"])
+
+ config (mach.core/config)
  }

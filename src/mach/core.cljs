@@ -107,16 +107,16 @@
       (get-in machfile (:path x))
       x)))
 
-(defn step [machfile k message?]
+(defn step [machfile k]
   (if-let [v (get machfile k)]
     (let [work-done (some identity (doall (for [dep (get v 'depends)]
-                                            (step machfile dep false))))
+                                            (step machfile dep))))
           novelty (when (get v 'novelty)
-                    (:value
-                     (cljs/eval
-                      repl/st
-                      (resolve-keywords (get v 'novelty) v)
-                      identity)))]
+                    (let [res (cljs/eval
+                               repl/st
+                               (resolve-keywords (get v 'novelty) v)
+                               identity)]
+                      (:value res)))]
 
       ;; Call update!
       (if (or work-done
@@ -136,21 +136,23 @@
           (do (cljs/eval repl/st code identity)
               true))
 
-        (do
-          (when message? (println "Nothing to do!"))
-          false)))
+        ))
 
     (println "No target:" k)))
 
 (defn mach [err input]
-  (let [target (symbol (first (drop 3 (.-argv nodejs/process))))]
+  (let [targets (or (drop 3 (map symbol (.-argv nodejs/process))) ['default])]
     (if err
       (println "ERROR")
       (let [machfile (reader/read-string input)
             machfile (postwalk (resolve-refs machfile) machfile)]
 
         (binding [cljs/*eval-fn* repl/caching-node-eval]
-          (step machfile target true))))))
+          (when-not
+              (some identity
+                    (doall (for [target targets]
+                             (step machfile target))))
+            (println "Nothing to do!")))))))
 
 (.readFile fs "Machfile.edn" "utf-8" mach)
 

@@ -333,6 +333,11 @@ Mach sits on the extensive nodejs eco-system. If you need to do
 anything remotely complex, feel free to pick from the
 quarter-million-plus modules available to you.
 
+## Thanks
+
+Mach is built on [lumo](https://github.com/anmonteiro/lumo) by António
+Nuno Monteiro.
+
 ## Influences
 
 Mach is influenced by Make, particularly GNU Make, which has survived

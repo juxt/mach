@@ -133,3 +133,24 @@
           (step machfile target true))))))
 
 (.readFile fs "Machfile.edn" "utf-8" mach)
+
+(defn act [err input]
+  (if err
+    (println "input error")
+    (println "Read input ok:" (reader/read-string input))))
+
+(defn config []
+  (println "Testing")
+  #_(.readFile fs "/home/malcolm/src/kermit/resources/config.edn" "utf-8" act)
+  (.readFile fs "foo.edn" "utf-8" act)
+  )
+
+(def profile :prod)
+
+(defn read-profile [value]
+  (println "Reading" value)
+  "hi")
+
+(reader/register-tag-parser!
+ "custom"
+ read-profile)

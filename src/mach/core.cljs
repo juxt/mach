@@ -7,7 +7,6 @@
    [cljs.nodejs :as nodejs]
    [cljs.pprint :as pprint]
    [cljs.reader :as reader]
-   [clojure.walk :refer [postwalk]]
    [cljs.tools.reader :as r]
    [cljs.js :as cljs]
    [lumo.repl :as repl]

@@ -99,33 +99,37 @@
 
 (defn step [machfile k message?]
   (if-let [v (get machfile k)]
-    (do
-      (doseq [dep (get v 'depends)]
-        (step machfile dep false))
-      (let [novelty (when (get v 'novelty)
-                      (:value
-                       (cljs/eval
-                        repl/st
-                        (resolve-keywords (get v 'novelty) v)
-                        identity)))]
+    (let [work-done (some identity (doall (for [dep (get v 'depends)]
+                                            (step machfile dep false))))
+          novelty (when (get v 'novelty)
+                    (:value
+                     (cljs/eval
+                      repl/st
+                      (resolve-keywords (get v 'novelty) v)
+                      identity)))]
 
-        ;; Call update!
-        (if (or (nil? (get v 'novelty))
-                (true? novelty)
-                (when (seq? novelty) (not-empty novelty)))
-          (let [code (resolve-keywords (if (map? v)
-                                         (get v 'update!)
-                                         v)
-                                       (if (map? v)
-                                         (merge
-                                          v
-                                          ;; Already computed novelty
-                                          {'novelty `(quote ~novelty)})
-                                         {}))]
-            (cljs/eval repl/st
-                       code
-                       identity))
-          (when message? (println "Nothing to do!")))))
+      ;; Call update!
+      (if (or work-done
+              (not (map? v))
+              (and (get v 'update!) (nil? (get v 'novelty)))
+              (true? novelty)
+              (when (seq? novelty) (not-empty novelty)))
+        (let [code (resolve-keywords (if (map? v)
+                                       (get v 'update!)
+                                       v)
+                                     (if (map? v)
+                                       (merge
+                                        v
+                                        ;; Already computed novelty
+                                        {'novelty `(quote ~novelty)})
+                                       {}))]
+          (do (cljs/eval repl/st code identity)
+              true))
+
+        (do
+          (when message? (println "Nothing to do!"))
+          false)))
+
     (println "No target:" k)))
 
 (defn mach [err input]

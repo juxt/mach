@@ -50,6 +50,16 @@
 (defn file? [f]
   (.. fs (lstatSync f) (isFile)))
 
+(defn files
+  ([dir]
+   (when (dir? dir)
+     (seq (.readdirSync fs dir))))
+  ([]
+   (files ".")))
+
+(defn has-suffix [suffix]
+  #(.endsWith % suffix))
+
 (defn file-seq [dir]
   (if (.existsSync fs dir)
     (tree-seq

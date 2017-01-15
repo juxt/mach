@@ -2,6 +2,8 @@
 
 In the beginning, we built code with custom shell scripts.
 
+<iframe style="width: 100%; margin-bottom: 1em;" src='https://www.youtube.com/watch?v=jzDbiP_xbYo' frameborder='0' allowfullscreen></iframe>
+
 The problem with shell scripts was they tended to be dumb, knowing
 only how to build the entire project from scratch.
 

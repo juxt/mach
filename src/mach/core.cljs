@@ -135,9 +135,7 @@
                                         {'novelty `(quote ~novelty)})
                                        {}))]
           (do (cljs/eval repl/st code identity)
-              true))
-
-        ))
+              true))))
 
     (throw (ex-info (str "No target: " k) {}))))
 

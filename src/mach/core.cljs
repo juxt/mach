@@ -76,7 +76,7 @@
                                        (mapcat mach.core/file-seq source)
                                        (mach.core/file-seq source)))))
 
-(defn resolve-keywords [expr scope]
+(defn resolve-symbols [expr scope]
   (postwalk (fn [x]
               (if (symbol? x)
                 (if-let [v (get scope x)] v x)
@@ -119,7 +119,7 @@
           ;; Any clean! in here?
           (if-let [rule (get v 'clean!)]
             ;; If so, call it
-            (cljs/eval repl/st (resolve-keywords rule v) identity)
+            (cljs/eval repl/st (resolve-symbols rule v) identity)
             ;; Otherwise implied policy is to delete declared target files
             (when-let [targetfile (get v 'target)]
               (if (coll? targetfile)
@@ -157,7 +157,7 @@
                 novelty (when (get v 'novelty)
                           (let [res (cljs/eval
                                      repl/st
-                                     (resolve-keywords (get v 'novelty) v)
+                                     (resolve-symbols (get v 'novelty) v)
                                      identity)]
                             (:value res)))]
 
@@ -167,15 +167,15 @@
                     (and (get v 'update!) (nil? (get v 'novelty)))
                     (true? novelty)
                     (when (seq? novelty) (not-empty novelty)))
-              (let [code (resolve-keywords (if (map? v)
-                                             (get v 'update!)
-                                             v)
-                                           (if (map? v)
-                                             (merge
-                                              v
-                                              ;; Already computed novelty
-                                              {'novelty `(quote ~novelty)})
-                                             {}))]
+              (let [code (resolve-symbols (if (map? v)
+                                            (get v 'update!)
+                                            v)
+                                          (if (map? v)
+                                            (merge
+                                             v
+                                             ;; Already computed novelty
+                                             {'novelty `(quote ~novelty)})
+                                            {}))]
                 (do (cljs/eval repl/st code identity)
                     true))))
 

@@ -347,7 +347,16 @@ Mach is influenced by Make, particularly GNU Make, which has survived
 the test of time (but not without baggage).
 
 I also looked at Jake, which is a worthy re-implementation of Make,
-sticking close to the original.
+sticking close to the original. Also,
+[Ninja](https://ninja-build.org/) and
+[Tup](http://gittup.org/tup/make_vs_tup.html).
+
+Paul deGrandis [suggested](https://github.com/juxt/mach/issues/3) it
+was a good idea to look at
+[Mk](https://swtch.com/plan9port/man/man1/mk.html), which has
+influenced the 'auto-clean' feature.
+
+
 
 ## Road map
 

@@ -116,26 +116,25 @@
       (case subtarget
         'clean
         (do
-          ;; Dependencies
+          ;; Any clean! in here?
+          (if-let [rule (get v 'clean!)]
+            ;; If so, call it
+            (cljs/eval repl/st (resolve-keywords rule v) identity)
+            ;; Otherwise implied policy is to delete declared target files
+            (when-let [targetfile (get v 'target)]
+              (if (coll? targetfile)
+                (if (some dir? targetfile)
+                  (apply sh "rm" "-rf" targetfile)
+                  (apply sh "rm" "-f" targetfile))
+                (cond
+                  (dir? targetfile) (sh "rm" "-rf" targetfile)
+                  (file-exists? targetfile) (sh "rm" "-f" targetfile)
+                  :otherwise false))))
+          ;; Dependencies (at the end)
           (doall
-           (for [dep (get v 'depends)]
+           (for [dep (reverse (get v 'depends))]
              (exec-sub-target machfile dep subtarget)))
-          ;; Target files (automatic)
-          (when-let [targetfile (get v 'target)]
-            (if (coll? targetfile)
-              (if (some dir? targetfile)
-                (apply sh "rm" "-rf" targetfile)
-                (apply sh "rm" "-f" targetfile))
-              (cond
-                (dir? targetfile) (sh "rm" "-rf" targetfile)
-                (file-exists? targetfile) (sh "rm" "-f" targetfile)
-                :otherwise false)))
-          ;; Any clean in here
-          (when-let [rule (get v 'clean)]
-            (cljs/eval
-             repl/st
-             (resolve-keywords rule v)
-             identity))
+
           true)
         (throw (ex-info (str "Unknown subtarget: " subtarget) {})))
       true)

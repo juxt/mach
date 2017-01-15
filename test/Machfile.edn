@@ -6,17 +6,20 @@
  target-dir {target "target"
              novelty (not (mach.core/file-exists? target))
              update! #$ ["mkdir" target]
-             clean! #$ ["rmdir" target]}
+             clean!  (when (mach.core/file-exists? target)
+                       #$ ["rmdir" target])}
 
  classes-dir {target "target/classes"
               depends [target-dir]
-              update! #$ ["mkdir" target]}
+              update! #$ ["mkdir" target]
+              clean! (when (mach.core/file-exists? target)
+                       #$ ["rmdir" target])}
 
- classes {target "target/classes"
-          ;; Here novelty is defined directly, not via reference to dependencies
-          depends [classes-dir]
-          novelty (mach.core/modified-since target "src")
-          update! #$$ ["javac -d" target novelty]}
+ classes {depends [classes-dir]
+          novelty (mach.core/modified-since #ref [classes-dir target] "src")
+          update! #$$ ["javac" "-d" #ref [classes-dir target] novelty]
+          clean! (when (mach.core/file-exists? #ref [classes-dir target])
+                   #$ ["rm" "-rf" (str #ref [classes-dir target] "/*")])}
 
  sass {dir "sass"}
 
@@ -36,7 +39,7 @@
                 #ref [css target]))
       update! (if (mach.core/file-exists? target)
                 #$$ ["jar uf" target novelty]
-                #$ ["jar cf" target #ref [classes target]])}
+                #$ ["jar cf" target #ref [classes-dir target]])}
 
  clean {depends [jar:clean]}
  }

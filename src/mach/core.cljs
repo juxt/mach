@@ -121,14 +121,14 @@
             ;; If so, call it
             (cljs/eval repl/st (resolve-symbols rule v) identity)
             ;; Otherwise implied policy is to delete declared target files
-            (when-let [targetfile (get v 'target)]
-              (if (coll? targetfile)
-                (if (some dir? targetfile)
-                  (apply sh "rm" "-rf" targetfile)
-                  (apply sh "rm" "-f" targetfile))
+            (when-let [product (get v 'product)]
+              (if (coll? product)
+                (if (some dir? product)
+                  (apply sh "rm" "-rf" product)
+                  (apply sh "rm" "-f" product))
                 (cond
-                  (dir? targetfile) (sh "rm" "-rf" targetfile)
-                  (file-exists? targetfile) (sh "rm" "-f" targetfile)
+                  (dir? product) (sh "rm" "-rf" product)
+                  (file-exists? product) (sh "rm" "-f" product)
                   :otherwise false))))
           ;; Dependencies (at the end)
           (doall

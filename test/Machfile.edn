@@ -3,43 +3,43 @@
 
  hello2 #$ ["echo" "Hello" "World!"]
 
- target-dir {target "target"
-             novelty (not (mach.core/file-exists? target))
-             update! #$ ["mkdir" target]
-             clean!  (when (mach.core/file-exists? target)
-                       #$ ["rmdir" target])}
+ target-dir {product "target"
+             novelty (not (mach.core/file-exists? product))
+             update! #$ ["mkdir" product]
+             clean!  (when (mach.core/file-exists? product)
+                       #$ ["rmdir" product])}
 
- classes-dir {target "target/classes"
+ classes-dir {product "target/classes"
               depends [target-dir]
-              update! #$ ["mkdir" target]
-              clean! (when (mach.core/file-exists? target)
-                       #$ ["rmdir" target])}
+              update! #$ ["mkdir" product]
+              clean! (when (mach.core/file-exists? product)
+                       #$ ["rmdir" product])}
 
  classes {depends [classes-dir]
-          novelty (mach.core/modified-since #ref [classes-dir target] "src")
-          update! #$$ ["javac" "-d" #ref [classes-dir target] novelty]
-          clean! (when (mach.core/file-exists? #ref [classes-dir target])
-                   #$ ["rm" "-rf" (str #ref [classes-dir target] "/*")])}
+          novelty (mach.core/modified-since #ref [classes-dir product] "src")
+          update! #$$ ["javac" "-d" #ref [classes-dir product] novelty]
+          clean! (when (mach.core/file-exists? #ref [classes-dir product])
+                   #$ ["rm" "-rf" (str #ref [classes-dir product] "/*")])}
 
  sass {dir "sass"}
 
- css {target "target/app.css"
+ css {product "target/app.css"
       depends [target-dir]
-      novelty (mach.core/modified-since target #ref [sass dir])
-      update! (apply mach.core/sh (concat ["sassc"] novelty [">" target]))}
+      novelty (mach.core/modified-since product #ref [sass dir])
+      update! (apply mach.core/sh (concat ["sassc"] novelty [">" product]))}
 
- jar {target "target/foo.jar"
+ jar {product "target/foo.jar"
       depends [target-dir classes css]
       novelty (concat
                (filter
-                (partial mach.core/modified-since? (mach.core/last-modified target))
-                #ref [classes target])
+                (partial mach.core/modified-since? (mach.core/last-modified product))
+                #ref [classes product])
                (filter
-                (partial mach.core/modified-since? (mach.core/last-modified target))
-                #ref [css target]))
-      update! (if (mach.core/file-exists? target)
-                #$$ ["jar uf" target novelty]
-                #$ ["jar cf" target #ref [classes-dir target]])}
+                (partial mach.core/modified-since? (mach.core/last-modified product))
+                #ref [css product]))
+      update! (if (mach.core/file-exists? product)
+                #$$ ["jar uf" product novelty]
+                #$ ["jar cf" product #ref [classes-dir product]])}
 
  clean {depends [jar:clean]}
  }

@@ -44,7 +44,9 @@
   (.mkdirSync fs path))
 
 (defn dir? [f]
-  (.. fs (lstatSync f) (isDirectory)))
+  (and
+   (file-exists? f)
+   (.. fs (lstatSync f) (isDirectory))))
 
 (defn file? [f]
   (.. fs (lstatSync f) (isFile)))
@@ -108,44 +110,77 @@
       (get-in machfile (:path x))
       x)))
 
-(defn build-target
-  "Build a target"
-  [machfile target]
+(defn exec-sub-target [machfile target subtarget]
   (if-let [v (get machfile target)]
-    (let [work-done (some identity (doall (for [dep (get v 'depends)]
-                                            (build-target machfile dep))))
-          novelty (when (get v 'novelty)
-                    (let [res (cljs/eval
-                               repl/st
-                               (resolve-keywords (get v 'novelty) v)
-                               identity)]
-                      (:value res)))]
-
-      ;; Call update!
-      (if (or work-done
-              (not (map? v))
-              (and (get v 'update!) (nil? (get v 'novelty)))
-              (true? novelty)
-              (when (seq? novelty) (not-empty novelty)))
-        (let [code (resolve-keywords (if (map? v)
-                                       (get v 'update!)
-                                       v)
-                                     (if (map? v)
-                                       (merge
-                                        v
-                                        ;; Already computed novelty
-                                        {'novelty `(quote ~novelty)})
-                                       {}))]
-          (do (cljs/eval repl/st code identity)
-              true))))
-
+    (do
+      (case subtarget
+        'clean
+        (do
+          ;; Dependencies
+          (doall
+           (for [dep (get v 'depends)]
+             (exec-sub-target machfile dep subtarget)))
+          ;; Target files (automatic)
+          (when-let [targetfile (get v 'target)]
+            (if (coll? targetfile)
+              (if (some dir? targetfile)
+                (apply sh "rm" "-rf" targetfile)
+                (apply sh "rm" "-f" targetfile))
+              (cond
+                (dir? targetfile) (sh "rm" "-rf" targetfile)
+                (file-exists? targetfile) (sh "rm" "-f" targetfile)
+                :otherwise false)))
+          ;; Any clean in here
+          (when-let [rule (get v 'clean)]
+            (cljs/eval
+             repl/st
+             (resolve-keywords rule v)
+             identity))
+          true)
+        (throw (ex-info (str "Unknown subtarget: " subtarget) {})))
+      true)
     (throw (ex-info (str "No target: " target) {}))))
+
+(defn build-target
+  "Build a target, return true if work was done"
+  [machfile target]
+  (let [ix (.indexOf (str target) ":")]
+    (if (pos? ix)
+      (exec-sub-target machfile (symbol (subs (str target) 0 ix)) (symbol (subs (str target) (inc ix))))
+      (if-let [v (get machfile target)]
+        (let [work-done (some identity (doall (for [dep (get v 'depends)]
+                                                (build-target machfile dep))))
+              novelty (when (get v 'novelty)
+                        (let [res (cljs/eval
+                                   repl/st
+                                   (resolve-keywords (get v 'novelty) v)
+                                   identity)]
+                          (:value res)))]
+
+          ;; Call update!
+          (if (or work-done
+                  (not (map? v))
+                  (and (get v 'update!) (nil? (get v 'novelty)))
+                  (true? novelty)
+                  (when (seq? novelty) (not-empty novelty)))
+            (let [code (resolve-keywords (if (map? v)
+                                           (get v 'update!)
+                                           v)
+                                         (if (map? v)
+                                           (merge
+                                            v
+                                            ;; Already computed novelty
+                                            {'novelty `(quote ~novelty)})
+                                           {}))]
+              (do (cljs/eval repl/st code identity)
+                  true))))
+
+        (throw (ex-info (str "No target: " target) {}))))))
 
 (defn mach [input]
   (let [targets (or (drop 3 (map symbol (.-argv nodejs/process))) ['default])]
     (let [machfile (reader/read-string input)
           machfile (postwalk (resolve-refs machfile) machfile)]
-
       (try
         (binding [cljs/*eval-fn* repl/caching-node-eval]
           (when-not

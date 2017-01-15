@@ -3,41 +3,40 @@
 
  hello2 #$ ["echo" "Hello" "World!"]
 
- src {dir "src"}
+ target-dir {target "target"
+             novelty (not (mach.core/file-exists? target))
+             update! #$ ["mkdir" target]
+             clean! #$ ["rmdir" target]}
 
- classes {dir "target/classes"
+ classes-dir {target "target/classes"
+              depends [target-dir]
+              update! #$ ["mkdir" target]}
+
+ classes {target "target/classes"
           ;; Here novelty is defined directly, not via reference to dependencies
-          novelty (mach.core/modified-since dir #ref [src dir])
-          update! (do
-                    #$ ["mkdir -p" dir]
-                    #$$ ["javac -d" dir novelty])}
+          depends [classes-dir]
+          novelty (mach.core/modified-since target "src")
+          update! #$$ ["javac -d" target novelty]}
 
  sass {dir "sass"}
 
- target {dir "target"
-         novelty (not (mach.core/file-exists? dir))
-         update! #$ ["mkdir" dir]}
-
  css {target "target/app.css"
-      depends [target]
+      depends [target-dir]
       novelty (mach.core/modified-since target #ref [sass dir])
       update! (apply mach.core/sh (concat ["sassc"] novelty [">" target]))}
 
  jar {target "target/foo.jar"
-      depends [classes css]
+      depends [target-dir classes css]
       novelty (concat
                (filter
                 (partial mach.core/modified-since? (mach.core/last-modified target))
-                #ref [classes dir])
+                #ref [classes target])
                (filter
                 (partial mach.core/modified-since? (mach.core/last-modified target))
                 #ref [css target]))
       update! (if (mach.core/file-exists? target)
                 #$$ ["jar uf" target novelty]
-                #$ ["jar cf" target #ref [classes dir]])}
+                #$ ["jar cf" target #ref [classes target]])}
 
- clean (do (println "Cleaning project")
-           #$ ["rm" "-rf" "target"])
-
- config (mach.core/config)
+ clean {depends [jar:clean]}
  }

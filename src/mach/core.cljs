@@ -108,10 +108,12 @@
       (get-in machfile (:path x))
       x)))
 
-(defn step [machfile k]
-  (if-let [v (get machfile k)]
+(defn build-target
+  "Build a target"
+  [machfile target]
+  (if-let [v (get machfile target)]
     (let [work-done (some identity (doall (for [dep (get v 'depends)]
-                                            (step machfile dep))))
+                                            (build-target machfile dep))))
           novelty (when (get v 'novelty)
                     (let [res (cljs/eval
                                repl/st
@@ -137,7 +139,7 @@
           (do (cljs/eval repl/st code identity)
               true))))
 
-    (throw (ex-info (str "No target: " k) {}))))
+    (throw (ex-info (str "No target: " target) {}))))
 
 (defn mach [input]
   (let [targets (or (drop 3 (map symbol (.-argv nodejs/process))) ['default])]
@@ -149,7 +151,7 @@
           (when-not
               (some identity
                     (doall (for [target targets]
-                             (step machfile target))))
+                             (build-target machfile target))))
             (println "Nothing to do!")))
         (catch :default e
           (if-let [message (.-message e)]

@@ -234,6 +234,12 @@ updated (if stale) prior to this target being considered for update.
 
 A `depends` is simply a sequence of targets to check.
 
+### product
+
+The product of a target is the file (or files) that it produces. If
+you declare this with the special symbol `product` it will assist the
+'auto-clean' feature of Mach.
+
 ### novelty
 
 Deciding whether a target is stale (requiring a re-build) or fresh (no
@@ -330,6 +336,18 @@ classes {update! (compile #ref [src dir])}
 The `#ref` tag must be followed by a vector of symbols which target
 the required value.
 
+## Verbs
+
+A target can optionally be called with a verb.
+
+For example:
+
+```
+mach pdf:clean
+```
+
+This calls the `pdf` target with the `clean` verb.
+
 ## Built on nodejs
 
 Mach sits on the extensive nodejs eco-system. If you need to do
@@ -354,7 +372,7 @@ sticking close to the original. Also,
 Paul deGrandis [suggested](https://github.com/juxt/mach/issues/3) it
 was a good idea to look at
 [Mk](https://swtch.com/plan9port/man/man1/mk.html), which has
-influenced the 'auto-clean' feature.
+influenced the verbs and 'auto-clean' features.
 
 
 

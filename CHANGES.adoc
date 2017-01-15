@@ -1,0 +1,11 @@
+= Change Log
+
+== [1.0.1]
+
+Initial release
+
+== [1.0.2]
+
+- Output and errors now appear on the console
+
+- If target doesn't exist, the 'Nothing to do!' message is quashed

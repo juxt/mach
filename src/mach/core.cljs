@@ -141,26 +141,24 @@
 
     (throw (ex-info (str "No target: " k) {}))))
 
-(defn mach [err input]
+(defn mach [input]
   (let [targets (or (drop 3 (map symbol (.-argv nodejs/process))) ['default])]
-    (if err
-      (println "ERROR")
-      (let [machfile (reader/read-string input)
-            machfile (postwalk (resolve-refs machfile) machfile)]
+    (let [machfile (reader/read-string input)
+          machfile (postwalk (resolve-refs machfile) machfile)]
 
-        (try
-          (binding [cljs/*eval-fn* repl/caching-node-eval]
-            (when-not
-                (some identity
-                      (doall (for [target targets]
-                               (step machfile target))))
-              (println "Nothing to do!")))
-          (catch :default e
-            (if-let [message (.-message e)]
-              (println message)
-              (println "Error:" e))))))))
+      (try
+        (binding [cljs/*eval-fn* repl/caching-node-eval]
+          (when-not
+              (some identity
+                    (doall (for [target targets]
+                             (step machfile target))))
+            (println "Nothing to do!")))
+        (catch :default e
+          (if-let [message (.-message e)]
+            (println message)
+            (println "Error:" e)))))))
 
-(.readFile fs "Machfile.edn" "utf-8" mach)
+(mach (.readFileSync fs "Machfile.edn" "utf-8"))
 
 ;; Aero support This is mostly just copy-and-paste from Aero code When
 ;; I've worked out how to include other cljs namespaces into a

@@ -139,7 +139,7 @@
 
         ))
 
-    (println "No target:" k)))
+    (throw (ex-info (str "No target: " k) {}))))
 
 (defn mach [err input]
   (let [targets (or (drop 3 (map symbol (.-argv nodejs/process))) ['default])]
@@ -148,12 +148,17 @@
       (let [machfile (reader/read-string input)
             machfile (postwalk (resolve-refs machfile) machfile)]
 
-        (binding [cljs/*eval-fn* repl/caching-node-eval]
-          (when-not
-              (some identity
-                    (doall (for [target targets]
-                             (step machfile target))))
-            (println "Nothing to do!")))))))
+        (try
+          (binding [cljs/*eval-fn* repl/caching-node-eval]
+            (when-not
+                (some identity
+                      (doall (for [target targets]
+                               (step machfile target))))
+              (println "Nothing to do!")))
+          (catch :default e
+            (if-let [message (.-message e)]
+              (println message)
+              (println "Error:" e))))))))
 
 (.readFile fs "Machfile.edn" "utf-8" mach)
 

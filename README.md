@@ -180,7 +180,7 @@ would be reason enough to choose it. It has many other advantages
 though.
 
 The Machfile is a map, modelled in a similar fashion to the original
-Machfile, with targets as keys and dependencies/actions as values.
+Makefile, with targets as keys and dependencies/actions as values.
 
 ### Targets
 

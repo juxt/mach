@@ -129,31 +129,8 @@
 
 (defmulti apply-verb (fn [machfile target verb] verb))
 
-(defmethod apply-verb 'clean [machfile target verb]
-  (do
-    (doseq [target (order machfile target)
-            :let [v (get machfile target)]]
-      (if-let [rule (get v 'clean!)]
-        ;; If so, call it
-        (cljs/eval repl/st (resolve-symbols rule v) identity)
-        ;; Otherwise implied policy is to delete declared target files
-        (when-let [product (get v 'product)]
-          (if (coll? product)
-            (if (some dir? product)
-              (apply sh "rm" "-rf" product)
-              (apply sh "rm" "-f" product))
-            (cond
-              (dir? product) (sh "rm" "-rf" product)
-              (file-exists? product) (sh "rm" "-f" product)
-              ;; er? this is overridden later
-              :otherwise false)))))
-    true))
-
-(defmethod apply-verb 'tree [machfile target verb]
-  (do
-      (pprint/pprint
-       (order machfile target))
-      true))
+(defmethod apply-verb :default [machfile target verb]
+  (throw (ex-info (str "Unknown verb: '" verb "'") {})))
 
 (defmethod apply-verb nil [machfile target verb]
   (some identity
@@ -196,9 +173,39 @@
 
                (throw (ex-info (str "No target: " target) {}))))))))
 
-(defmethod apply-verb :default [machfile target verb]
-  (throw (ex-info (str "Unknown verb: '" verb "'") {}))
-  )
+(defmethod apply-verb 'clean [machfile target verb]
+  (doseq [target (order machfile target)
+          :let [v (get machfile target)]]
+    (if-let [rule (get v 'clean!)]
+      ;; If so, call it
+      (cljs/eval repl/st (resolve-symbols rule v) identity)
+      ;; Otherwise implied policy is to delete declared target files
+      (when-let [product (get v 'product)]
+        (if (coll? product)
+          (if (some dir? product)
+            (apply sh "rm" "-rf" product)
+            (apply sh "rm" "-f" product))
+          (cond
+            (dir? product) (sh "rm" "-rf" product)
+            (file-exists? product) (sh "rm" "-f" product)
+            ;; er? this is overridden later
+            :otherwise false)))))
+  true)
+
+(defmethod apply-verb 'tree [machfile target verb]
+  (pprint/pprint
+   (order machfile target))
+  true)
+
+(defmethod apply-verb 'novelty [machfile target verb]
+  (pprint/pprint
+   (when-let [recipe (get machfile target)]
+     (when (get recipe 'novelty)
+       (let [res (cljs/eval
+                  repl/st
+                  (resolve-symbols (get recipe 'novelty) recipe)
+                  identity)]
+         (:value res))))))
 
 (defn build-target
   "Build a target, return true if work was done"
@@ -304,6 +311,7 @@
        (r/read-string (fs.readFileSync source "utf-8"))))))
 
 (defn spit [f data]
+  (println "Writing" f)
   (fs.writeFileSync f data))
 
 ;; AWS credentials parsing

@@ -13,3 +13,21 @@ Initial release.
 - Added verbs, such as 'clean', that can be given to targets.
 
 - Some termininology refinements: product is now used for the files that a target generates.
+
+== [1.0.3]
+
+- Proper topographical sorting which ensures that dependencies are not called more than one.
+
+- The 'clean' verb can be given to a target via a colon
+
+```
+mach jar:clean
+```
+
+Currently only one verb can be given to a target at a given time. It's
+not yet possible to specify verbs via a depends declaration.
+
+- Refactoring around verbs
+
+- Some AWS-specific functions added to core - these will be moved to a
+  separate area once Mach is better structured.

@@ -127,76 +127,78 @@
       (get-in machfile (:path x))
       x)))
 
-(defn exec-verb [machfile target verb]
-  (cond
-    (= verb 'tree)
-    (do
+(defmulti apply-verb (fn [machfile target verb] verb))
+
+(defmethod apply-verb 'clean [machfile target verb]
+  (do
+    (doseq [target (order machfile target)
+            :let [v (get machfile target)]]
+      (if-let [rule (get v 'clean!)]
+        ;; If so, call it
+        (cljs/eval repl/st (resolve-symbols rule v) identity)
+        ;; Otherwise implied policy is to delete declared target files
+        (when-let [product (get v 'product)]
+          (if (coll? product)
+            (if (some dir? product)
+              (apply sh "rm" "-rf" product)
+              (apply sh "rm" "-f" product))
+            (cond
+              (dir? product) (sh "rm" "-rf" product)
+              (file-exists? product) (sh "rm" "-f" product)
+              ;; er? this is overridden later
+              :otherwise false)))))
+    true))
+
+(defmethod apply-verb 'tree [machfile target verb]
+  (do
       (pprint/pprint
        (order machfile target))
-      true)
+      true))
 
-    (= verb 'clean)
-    (do
-      (doseq [target (order machfile target)
-              :let [v (get machfile target)]]
-        (if-let [rule (get v 'clean!)]
-          ;; If so, call it
-          (cljs/eval repl/st (resolve-symbols rule v) identity)
-          ;; Otherwise implied policy is to delete declared target files
-          (when-let [product (get v 'product)]
-            (if (coll? product)
-              (if (some dir? product)
-                (apply sh "rm" "-rf" product)
-                (apply sh "rm" "-f" product))
-              (cond
-                (dir? product) (sh "rm" "-rf" product)
-                (file-exists? product) (sh "rm" "-f" product)
-                ;; er? this is overridden later
-                :otherwise false)))))
-      true)
+(defmethod apply-verb nil [machfile target verb]
+  (some identity
+        (doall
+         (for [target (reverse (order machfile target))
+               :let [recipe (get machfile target)]]
+           (do
+             (if recipe
+               (let [novelty (when (get recipe 'novelty)
+                               (let [res (cljs/eval
+                                          repl/st
+                                          (resolve-symbols (get recipe 'novelty) recipe)
+                                          identity)]
+                                 (:value res)))]
 
-    (= verb :default)
-    (some identity
-          (doall
-           (for [target (reverse (order machfile target))
-                 :let [recipe (get machfile target)]]
-             (do
-               (if recipe
-                 (let [novelty (when (get recipe 'novelty)
-                                 (let [res (cljs/eval
-                                            repl/st
-                                            (resolve-symbols (get recipe 'novelty) recipe)
-                                            identity)]
-                                   (:value res)))]
-
-                   ;; Call update!
-                   (if (or (not (map? recipe))
-                           (and (get recipe 'update!) (nil? (get recipe 'novelty)))
-                           (true? novelty)
-                           (when (seq? novelty) (not-empty novelty)))
-                     (let [code (resolve-symbols (if (map? recipe)
-                                                   (get recipe 'update!)
-                                                   recipe)
-                                                 (if (map? recipe)
-                                                   (merge
-                                                    recipe
-                                                    ;; Already computed novelty
-                                                    {'novelty `(quote ~novelty)})
-                                                   {}))]
-                       (do
-                         (cljs/eval repl/st code identity)
-                         ;; We don't do this because we have spit instead
-                         #_(binding [*print-fn*
+                 ;; Call update!
+                 (if (or (not (map? recipe))
+                         (and (get recipe 'update!) (nil? (get recipe 'novelty)))
+                         (true? novelty)
+                         (when (seq? novelty) (not-empty novelty)))
+                   (let [code (resolve-symbols (if (map? recipe)
+                                                 (get recipe 'update!)
+                                                 recipe)
+                                               (if (map? recipe)
+                                                 (merge
+                                                  recipe
+                                                  ;; Already computed novelty
+                                                  {'novelty `(quote ~novelty)})
+                                                 {}))]
+                     (do
+                       (cljs/eval repl/st code identity)
+                       ;; We don't do this because we have spit instead
+                       #_(binding [*print-fn*
                                    ;; Write to the product if it's declared
                                    (if-let [product (get recipe 'product)]
                                      (fn [x] (fs.writeFileSync product x))
                                      *print-fn*)]
                            (cljs/eval repl/st code identity))
-                         true))))
+                       true))))
 
-                 (throw (ex-info (str "No target: " target) {})))))))
+               (throw (ex-info (str "No target: " target) {}))))))))
 
-    :otherwise (throw (ex-info (str "Unknown verb: '" verb "'") {}))))
+(defmethod apply-verb :default [machfile target verb]
+  (throw (ex-info (str "Unknown verb: '" verb "'") {}))
+  )
 
 (defn build-target
   "Build a target, return true if work was done"
@@ -206,8 +208,8 @@
     (if (pos? ix)
       (let [target (symbol (subs tv 0 ix))
             verb (symbol (subs tv (inc ix)))]
-        (exec-verb machfile target verb))
-      (exec-verb machfile target:verb :default))))
+        (apply-verb machfile target verb))
+      (apply-verb machfile target:verb nil))))
 
 (defn mach [input]
   (let [targets (or (drop 3 (map symbol (.-argv nodejs/process))) ['default])]
@@ -308,9 +310,11 @@
 
 (def ini (nodejs/require "ini"))
 
+(def path (nodejs/require "path"))
+
 (defmethod reader 'aws/credentials
   [opts tag value]
-  (let [creds (get (js->clj (ini.parse (fs.readFileSync (str js/process.env.HOME ".aws/credentials") "utf-8"))) value)]
+  (let [creds (get (js->clj (ini.parse (fs.readFileSync (path.join js/process.env.HOME "/.aws/credentials") "utf-8"))) value)]
     {:aws-access-key-id (get creds "aws_access_key_id")
      :aws-secret-access-key (get creds "aws_secret_access_key")}))
 

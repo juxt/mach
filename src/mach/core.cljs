@@ -15,6 +15,23 @@
 
 (defonce ^:private st (cljs/empty-state))
 
+;; Sorting
+
+(def toposort (nodejs/require "toposort"))
+
+(defn order [machfile target]
+  (map symbol
+       (drop 1 ; drop nil
+             (js->clj
+              (toposort
+               (clj->js
+                (tree-seq
+                 (fn [[_ target]] (-> machfile (get target) (get 'depends)))
+                 (fn [[_ target]]
+                   (map vector (repeat target) (-> machfile (get target) (get 'depends))))
+                 [nil target]
+                 )))))))
+
 ;; References
 
 (defrecord Reference [path])
@@ -28,12 +45,12 @@
 (def child_process (nodejs/require "child_process"))
 
 (defn file-exists? [f]
-  (.existsSync fs f))
+  (fs.existsSync f))
 
 (defn last-modified [f]
   (if f
     (if (file-exists? f)
-      (.getTime (.-mtime (.statSync fs f)))
+      (.getTime (.-mtime (fs.statSync f)))
       0)
     0))
 
@@ -41,7 +58,7 @@
   (< since (last-modified f)))
 
 (defn mkdir [path]
-  (.mkdirSync fs path))
+  (fs.mkdirSync path))
 
 (defn dir? [f]
   (and
@@ -54,7 +71,7 @@
 (defn files
   ([dir]
    (when (dir? dir)
-     (seq (.readdirSync fs dir))))
+     (seq (fs.readdirSync dir))))
   ([]
    (files ".")))
 
@@ -62,10 +79,10 @@
   #(.endsWith % suffix))
 
 (defn file-seq [dir]
-  (if (.existsSync fs dir)
+  (if (fs.existsSync dir)
     (tree-seq
      dir?
-     (fn [d] (map (partial str d "/") (seq (.readdirSync fs d))))
+     (fn [d] (map (partial str d "/") (seq (fs.readdirSync d))))
      dir)
     []))
 
@@ -111,34 +128,75 @@
       x)))
 
 (defn exec-verb [machfile target verb]
-  (if-let [v (get machfile target)]
+  (cond
+    (= verb 'tree)
     (do
-      (case verb
-        'clean
-        (do
-          ;; Any clean! in here?
-          (if-let [rule (get v 'clean!)]
-            ;; If so, call it
-            (cljs/eval repl/st (resolve-symbols rule v) identity)
-            ;; Otherwise implied policy is to delete declared target files
-            (when-let [product (get v 'product)]
-              (if (coll? product)
-                (if (some dir? product)
-                  (apply sh "rm" "-rf" product)
-                  (apply sh "rm" "-f" product))
-                (cond
-                  (dir? product) (sh "rm" "-rf" product)
-                  (file-exists? product) (sh "rm" "-f" product)
-                  :otherwise false))))
-          ;; Dependencies (at the end)
-          (doall
-           (for [dep (reverse (get v 'depends))]
-             (exec-verb machfile dep verb)))
-
-          true)
-        (throw (ex-info (str "Unknown verb: '" verb "'") {})))
+      (pprint/pprint
+       (order machfile target))
       true)
-    (throw (ex-info (str "No target: " target) {}))))
+
+    (= verb 'clean)
+    (do
+      (doseq [target (order machfile target)
+              :let [v (get machfile target)]]
+        (if-let [rule (get v 'clean!)]
+          ;; If so, call it
+          (cljs/eval repl/st (resolve-symbols rule v) identity)
+          ;; Otherwise implied policy is to delete declared target files
+          (when-let [product (get v 'product)]
+            (if (coll? product)
+              (if (some dir? product)
+                (apply sh "rm" "-rf" product)
+                (apply sh "rm" "-f" product))
+              (cond
+                (dir? product) (sh "rm" "-rf" product)
+                (file-exists? product) (sh "rm" "-f" product)
+                ;; er? this is overridden later
+                :otherwise false)))))
+      true)
+
+    (= verb :default)
+    (some identity
+          (doall
+           (for [target (reverse (order machfile target))
+                 :let [recipe (get machfile target)]]
+             (do
+               (if recipe
+                 (let [novelty (when (get recipe 'novelty)
+                                 (let [res (cljs/eval
+                                            repl/st
+                                            (resolve-symbols (get recipe 'novelty) recipe)
+                                            identity)]
+                                   (:value res)))]
+
+                   ;; Call update!
+                   (if (or (not (map? recipe))
+                           (and (get recipe 'update!) (nil? (get recipe 'novelty)))
+                           (true? novelty)
+                           (when (seq? novelty) (not-empty novelty)))
+                     (let [code (resolve-symbols (if (map? recipe)
+                                                   (get recipe 'update!)
+                                                   recipe)
+                                                 (if (map? recipe)
+                                                   (merge
+                                                    recipe
+                                                    ;; Already computed novelty
+                                                    {'novelty `(quote ~novelty)})
+                                                   {}))]
+                       (do
+                         (cljs/eval repl/st code identity)
+                         ;; We don't do this because we have spit instead
+                         #_(binding [*print-fn*
+                                   ;; Write to the product if it's declared
+                                   (if-let [product (get recipe 'product)]
+                                     (fn [x] (fs.writeFileSync product x))
+                                     *print-fn*)]
+                           (cljs/eval repl/st code identity))
+                         true))))
+
+                 (throw (ex-info (str "No target: " target) {})))))))
+
+    :otherwise (throw (ex-info (str "Unknown verb: '" verb "'") {}))))
 
 (defn build-target
   "Build a target, return true if work was done"
@@ -149,37 +207,7 @@
       (let [target (symbol (subs tv 0 ix))
             verb (symbol (subs tv (inc ix)))]
         (exec-verb machfile target verb))
-      ;; No verb, defaults to build
-      (let [target target:verb]
-        (if-let [v (get machfile target)]
-          (let [work-done (some identity (doall (for [dep (get v 'depends)]
-                                                  (build-target machfile dep))))
-                novelty (when (get v 'novelty)
-                          (let [res (cljs/eval
-                                     repl/st
-                                     (resolve-symbols (get v 'novelty) v)
-                                     identity)]
-                            (:value res)))]
-
-            ;; Call update!
-            (if (or work-done
-                    (not (map? v))
-                    (and (get v 'update!) (nil? (get v 'novelty)))
-                    (true? novelty)
-                    (when (seq? novelty) (not-empty novelty)))
-              (let [code (resolve-symbols (if (map? v)
-                                            (get v 'update!)
-                                            v)
-                                          (if (map? v)
-                                            (merge
-                                             v
-                                             ;; Already computed novelty
-                                             {'novelty `(quote ~novelty)})
-                                            {}))]
-                (do (cljs/eval repl/st code identity)
-                    true))))
-
-          (throw (ex-info (str "No target: " target) {})))))))
+      (exec-verb machfile target:verb :default))))
 
 (defn mach [input]
   (let [targets (or (drop 3 (map symbol (.-argv nodejs/process))) ['default])]
@@ -192,12 +220,11 @@
                     (doall (for [target targets]
                              (build-target machfile target))))
             (println "Nothing to do!")))
+
         (catch :default e
           (if-let [message (.-message e)]
             (println message)
             (println "Error:" e)))))))
-
-(mach (.readFileSync fs "Machfile.edn" "utf-8"))
 
 ;; Aero support This is mostly just copy-and-paste from Aero code When
 ;; I've worked out how to include other cljs namespaces into a
@@ -272,7 +299,10 @@
   (let [opts (merge default-opts given-opts {:source source})]
     (get-in-ref
      (binding [r/*default-data-reader-fn* (partial reader opts)]
-       (r/read-string (.readFileSync fs source "utf-8"))))))
+       (r/read-string (fs.readFileSync source "utf-8"))))))
 
 (defn spit [f data]
-  (.writeFileSync fs f data))
+  (fs.writeFileSync f data))
+
+;; Main
+(mach (fs.readFileSync "Machfile.edn" "utf-8"))

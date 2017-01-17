@@ -27,6 +27,7 @@
   },
   "homepage": "https://github.com/juxt/mach#README.md",
   "dependencies": {
-    "lumo-cljs": "1.0.0"
+    "lumo-cljs": "1.0.0",
+    "toposort": "^1.0.0"
   }
 }

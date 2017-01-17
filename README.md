@@ -348,6 +348,29 @@ mach pdf:clean
 
 This calls the `pdf` target with the `clean` verb.
 
+## Implicit clean
+
+Since derived files are declared with `product`, Mach is able to
+automatically determine how to clean a target. Therefore, you don't
+need to specify a special rule, conventionally called `clean`, to
+clean up derived files.
+
+## Works with Aero
+
+Mach can read [Aero](https://github.com/juxt/aero) (EDN) config
+files. Aero is an ideal solution for storing the configuration data
+that drives build processes because it allows comments, supports the
+specification of multiple environments together in version control and
+has extension points for powerful customisation.
+
+```(mach.core/read-config "config.edn" {:profile :prod})```
+
+This opens up the possibillity to keep all your data in Aero and use
+the same data in your application, build and (dev)ops. Don't repeat
+yourself (DRY) for configuration up and down your stack.
+
+Status: experimental and incomplete
+
 ## Built on nodejs
 
 Mach sits on the extensive nodejs eco-system. If you need to do
@@ -374,9 +397,14 @@ was a good idea to look at
 [Mk](https://swtch.com/plan9port/man/man1/mk.html), which has
 influenced the verbs and 'auto-clean' features.
 
-
-
 ## Road map
 
 The goal of Mach is to create something that is capable of building
-complex systems as well as running them.
+complex systems as well as running them. One option is to use Mach to
+generate a classpath from a project.clj (`lein classpath`) and use
+that to run Clojure applications with java directly, avoiding the use
+of lein and its associated memory costs. It might also be possible to
+make more judicious use of AOT to speed things are further - by
+utilising file-system dates, it is possible to detect staleness and
+fix it when necessary - say if a project.clj is determined to be newer
+then the classpath can be regenerated.

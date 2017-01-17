@@ -310,7 +310,7 @@
 
 (defmethod reader 'aws/credentials
   [opts tag value]
-  (let [creds (get (js->clj (ini.parse (fs.readFileSync "/home/malcolm/.aws/credentials" "utf-8"))) value)]
+  (let [creds (get (js->clj (ini.parse (fs.readFileSync (str js/process.env.HOME ".aws/credentials") "utf-8"))) value)]
     {:aws-access-key-id (get creds "aws_access_key_id")
      :aws-secret-access-key (get creds "aws_secret_access_key")}))
 

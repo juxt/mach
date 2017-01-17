@@ -304,5 +304,24 @@
 (defn spit [f data]
   (fs.writeFileSync f data))
 
+;; AWS credentials parsing
+
+(def ini (nodejs/require "ini"))
+
+(defmethod reader 'aws/credentials
+  [opts tag value]
+  (let [creds (get (js->clj (ini.parse (fs.readFileSync "/home/malcolm/.aws/credentials" "utf-8"))) value)]
+    {:aws-access-key-id (get creds "aws_access_key_id")
+     :aws-secret-access-key (get creds "aws_secret_access_key")}))
+
+(defmethod reader 'join
+  [opts tag value]
+  (apply str value))
+
+;; Misc
+
+(defn json [foo]
+  (js/JSON.stringify (clj->js foo) nil 4))
+
 ;; Main
 (mach (fs.readFileSync "Machfile.edn" "utf-8"))

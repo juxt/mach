@@ -1,0 +1,5 @@
+#!/bin/bash
+
+MACH_HOME=${MACH_HOME:-$(npm -g root)/\@juxt/mach}
+
+lumo -c ${MACH_HOME}/src ${MACH_HOME}/src/mach/core.cljs $*

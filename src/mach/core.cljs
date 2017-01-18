@@ -1,5 +1,3 @@
-#!/usr/bin/lumo
-
 ;; Copyright © 2016-2017, JUXT LTD.
 
 (ns mach.core
@@ -7,9 +5,10 @@
    [cljs.nodejs :as nodejs]
    [cljs.pprint :as pprint]
    [cljs.reader :as reader]
-   [cljs.tools.reader :as r]
    [cljs.js :as cljs]
    [lumo.repl :as repl]
+   [aero.core :as aero]
+   aero.aws ; aero aws credentials reader
    [clojure.walk :refer [postwalk]]
    [clojure.string :as str]))
 
@@ -127,7 +126,9 @@
       (get-in machfile (:path x))
       x)))
 
-(defmulti apply-verb (fn [machfile target verb] verb))
+(defmulti apply-verb
+  "Return boolean to indicate if work was done (true) or not (false)"
+  (fn [machfile target verb] verb))
 
 (defmethod apply-verb :default [machfile target verb]
   (throw (ex-info (str "Unknown verb: '" verb "'") {})))
@@ -151,17 +152,20 @@
                          (and (get recipe 'update!) (nil? (get recipe 'novelty)))
                          (true? novelty)
                          (when (seq? novelty) (not-empty novelty)))
-                   (let [code (resolve-symbols (if (map? recipe)
-                                                 (get recipe 'update!)
-                                                 recipe)
-                                               (if (map? recipe)
-                                                 (merge
-                                                  recipe
-                                                  ;; Already computed novelty
-                                                  {'novelty `(quote ~novelty)})
-                                                 {}))]
+                   (let [code (resolve-symbols
+                               (if (map? recipe)
+                                 (get recipe 'update!)
+                                 recipe)
+                               (if (map? recipe)
+                                 (merge
+                                  recipe
+                                  ;; Already computed novelty
+                                  {'novelty `(quote ~novelty)})
+                                 {}))]
                      (do
-                       (cljs/eval repl/st code identity)
+                       (when-let [val (:value (cljs/eval repl/st code identity))]
+                         (println val))
+
                        ;; We don't do this because we have spit instead
                        #_(binding [*print-fn*
                                    ;; Write to the product if it's declared
@@ -169,6 +173,7 @@
                                      (fn [x] (fs.writeFileSync product x))
                                      *print-fn*)]
                            (cljs/eval repl/st code identity))
+                       ;; We did work so return true
                        true))))
 
                (throw (ex-info (str "No target: " target) {}))))))))
@@ -211,6 +216,7 @@
   "Build a target, return true if work was done"
   [machfile target:verb]
   (let [tv (str target:verb)
+        ;; TODO: Cope with multiverbs
         ix (.indexOf tv ":")]
     (if (pos? ix)
       (let [target (symbol (subs tv 0 ix))
@@ -219,7 +225,7 @@
       (apply-verb machfile target:verb nil))))
 
 (defn mach [input]
-  (let [targets (or (drop 3 (map symbol (.-argv nodejs/process))) ['default])]
+  (let [targets (or (drop 5 (map symbol (.-argv nodejs/process))) ['default])]
     (let [machfile (reader/read-string input)
           machfile (postwalk (resolve-refs machfile) machfile)]
       (try
@@ -235,102 +241,11 @@
             (println message)
             (println "Error:" e)))))))
 
-;; Aero support This is mostly just copy-and-paste from Aero code When
-;; I've worked out how to include other cljs namespaces into a
-;; lumo-based product, or even reference aero as a dependency, then
-;; I'm sure JUXT will produce a cljs version of Aero we can use
-;; directly. Still 'early days' here.
-
-(declare read-config)
-
-(defmulti reader (fn [opts tag value] tag))
-
-(defmethod reader :default
-  [_ tag value]
-  (throw (ex-info (str "No reader for tag: " tag) {:tag tag :value value})))
-
-(defmethod reader 'env
-  [opts tag value]
-  (aget js/process.env value))
-
-(defmethod reader 'profile
-  [{:keys [profile]} tag value]
-  (cond (contains? value profile) (get value profile)
-        (contains? value :default) (get value :default)
-        :otherwise nil))
-
-(defmethod reader 'user
-  [{:keys [user]} tag value]
-  (let [user (or user js/process.env.USER)]
-    (or
-     (some (fn [[k v]]
-             (when (or (= k user)
-                       (and (set? k) (contains? k user)))
-               v))
-           value)
-     (get value :default))))
-
-(defmethod reader 'include
-  [{:keys [resolver source] :as opts} tag value]
-  (read-config
-   (if (map? resolver)
-     (get resolver value)
-     (resolver source value))
-   opts))
-
-(defmethod reader 'join
-  [opts tag value]
-  (apply str value))
-
-(defmethod reader 'aws-kms-decrypt
-  [opts tag value]
-  "XXX")
-
-(defn- get-in-ref
-  [config]
-  (letfn [(get-in-conf [m]
-            (postwalk
-             (fn [v]
-               (if-not (contains? (meta v) :ref)
-                 v
-                 (get-in-conf (get-in config v))))
-             m))]
-    (get-in-conf config)))
-
-(def default-opts
-  {:profile :default
-   :resolver (fn [source include]
-               (if (.startsWith include "/")
-                 include
-                 (str source include)))})
-
-(defn read-config [source given-opts]
-  (let [opts (merge default-opts given-opts {:source source})]
-    (get-in-ref
-     (binding [r/*default-data-reader-fn* (partial reader opts)]
-       (r/read-string (fs.readFileSync source "utf-8"))))))
+;; Misc
 
 (defn spit [f data]
   (println "Writing" f)
   (fs.writeFileSync f data))
-
-;; AWS credentials parsing
-
-(def ini (nodejs/require "ini"))
-
-(def path (nodejs/require "path"))
-
-(defmethod reader 'aws/credentials
-  [opts tag value]
-  (let [creds (get (js->clj (ini.parse (fs.readFileSync (path.join js/process.env.HOME "/.aws/credentials") "utf-8"))) value)]
-    {:aws-access-key-id (get creds "aws_access_key_id")
-     :aws-secret-access-key (get creds "aws_secret_access_key")}))
-
-(defmethod reader 'join
-  [opts tag value]
-  (apply str value))
-
-;; Misc
 
 (defn json [foo]
   (js/JSON.stringify (clj->js foo) nil 4))

@@ -18,6 +18,21 @@
 
 (def toposort (nodejs/require "toposort"))
 
+(defn resolve-target
+  "Resolve target key (symbol) matching given target (string) in machfile."
+  [machfile target]
+  (if (contains? machfile (symbol target))
+    (symbol target)
+    ;; Else try to search for
+    (if-let [target
+             (some (fn [x]
+                     (let [[k v] x]
+                       (when (= target (get v 'product))
+                         k))
+                     ) machfile)]
+      (symbol target)
+      (throw (ex-info (str "Could not resolve target: " target) {})))))
+
 (defn order [machfile target]
   (map symbol
        (drop 1 ; drop nil
@@ -28,8 +43,7 @@
                  (fn [[_ target]] (-> machfile (get target) (get 'depends)))
                  (fn [[_ target]]
                    (map vector (repeat target) (-> machfile (get target) (get 'depends))))
-                 [nil target]
-                 )))))))
+                 [nil target])))))))
 
 ;; References
 
@@ -133,27 +147,26 @@
 
 (defmulti apply-verb
   "Return boolean to indicate if work was done (true) or not (false)"
-  (fn [machfile target verb] verb))
+  (fn [machfile target-name verb] verb))
 
-(defmethod apply-verb :default [machfile target verb]
+(defmethod apply-verb :default [machfile target-name verb]
   (throw (ex-info (str "Unknown verb: '" verb "'") {})))
 
-(defn update! [recipe novelty verb]
-  (when (and (get recipe 'produce)
-             (get recipe 'update!))
-    (throw (ex-info "Invalid to have both update! and produce in the same recipe" {:recipe recipe})))
+(defn update! [target novelty verb]
+  (when (and (get target 'produce)
+             (get target 'update!))
+    (throw (ex-info "Invalid to have both update! and produce in the same target" {:target target})))
 
   (let [code (resolve-symbols
               ;; Expression
-              (if (map? recipe)
-                (or (get recipe 'produce)
-                    (get recipe 'update!)
-                    )
-                recipe)
+              (if (map? target)
+                (or (get target 'produce)
+                    (get target 'update!))
+                target)
               ;; Scope
-              (if (map? recipe)
+              (if (map? target)
                 (merge
-                 recipe
+                 target
                  ;; Already computed novelty
                  {'novelty `(quote ~novelty)})
                 ;; Just a expression, no scope
@@ -163,51 +176,51 @@
       ;; Print regardless
       (cond
         (= verb 'print) (println val)
-        :otherwise (when (get recipe 'produce)
-                     (when-let [product (get recipe 'product)]
+        :otherwise (when (get target 'produce)
+                     (when-let [product (get target 'product)]
                        (spit product val)))))
 
     ;; We did work so return true
     true))
 
-(defmethod apply-verb nil [machfile target verb]
+(defmethod apply-verb nil [machfile target-name verb]
   (some identity
         (doall
-         (for [target (reverse (order machfile target))
-               :let [recipe (get machfile target)]]
+         (for [target-name (reverse (order machfile target-name))
+               :let [target (get machfile target-name)]]
            (do
-             (if recipe
-               (let [novelty (when (get recipe 'novelty)
+             (if target
+               (let [novelty (when (get target 'novelty)
                                (let [res (cljs/eval
                                           repl/st
-                                          (resolve-symbols (get recipe 'novelty) recipe)
+                                          (resolve-symbols (get target 'novelty) target)
                                           identity)]
                                  (:value res)))]
 
                  ;; Call update!
-                 (when (or (not (map? recipe))
-                           (and (get recipe 'update!) (nil? (get recipe 'novelty)))
+                 (when (or (not (map? target))
+                           (and (get target 'update!) (nil? (get target 'novelty)))
                            (true? novelty)
                            (when (seq? novelty) (not-empty novelty)))
 
-                   (update! recipe novelty verb)))
+                   (update! target novelty verb)))
 
                ;; Unlikely, already checked this in resolve-target
                (throw (ex-info (str "No target: " target) {}))))))))
 
 ;; Run the update (or produce) and print, no deps
-(defmethod apply-verb 'update [machfile target verb]
-  (let [recipe (get machfile target)]
-    (if recipe
-      (update! recipe nil verb)
-      (throw (ex-info (str "No target: " target) {})))))
+(defmethod apply-verb 'update [machfile target-name verb]
+  (let [target (get machfile target-name)]
+    (if target
+      (update! target nil verb)
+      (throw (ex-info (str "No target: " target-name) {})))))
 
 ;; Print the produce
-(defmethod apply-verb 'print [machfile target verb]
-  (let [recipe (get machfile target)]
-    (if recipe
-      (update! recipe nil verb)
-      (throw (ex-info (str "No target: " target) {})))))
+(defmethod apply-verb 'print [machfile target-name verb]
+  (let [target (get machfile target-name)]
+    (if target
+      (update! target nil verb)
+      (throw (ex-info (str "No target: " target-name) {})))))
 
 (defmethod apply-verb 'clean [machfile target verb]
   (doseq [target (order machfile target)
@@ -228,35 +241,22 @@
             :otherwise false)))))
   true)
 
-(defmethod apply-verb 'depends [machfile target verb]
+(defmethod apply-verb 'depends [machfile target-name verb]
   (pprint/pprint
-   (order machfile target))
+   (order machfile target-name))
   true)
 
-(defmethod apply-verb 'novelty [machfile target verb]
+(defmethod apply-verb 'novelty [machfile target-name verb]
   (pprint/pprint
-   (when-let [recipe (get machfile target)]
-     (when (get recipe 'novelty)
+   (when-let [target (get machfile target-name)]
+     (when (get target 'novelty)
        (let [res (cljs/eval
                   repl/st
-                  (resolve-symbols (get recipe 'novelty) recipe)
+                  (resolve-symbols (get target 'novelty) target)
                   identity)]
          (:value res))))))
 
-(defn resolve-target
-  "Resolve target key (symbol) matching given target (string) in machfile."
-  [machfile target]
-  (if (contains? machfile (symbol target))
-    (symbol target)
-    ;; Else try to search for
-    (if-let [target
-             (some (fn [x]
-                     (let [[k v] x]
-                       (when (= target (get v 'product))
-                         k))
-                     ) machfile)]
-      (symbol target)
-      (throw (ex-info (str "Could not resolve target: " target) {})))))
+
 
 (defn build-target
   "Build a target, return true if work was done"

@@ -6,14 +6,13 @@
  target-dir {product "target"
              novelty (not (mach.core/file-exists? product))
              update! #$ ["mkdir" product]
-             clean!  (when (mach.core/file-exists? product)
-                       #$ ["rmdir" product])}
+             clean!  #$ ["rmdir" product]}
 
  classes-dir {product "target/classes"
+              novelty (not (mach.core/file-exists? product))
               depends [target-dir]
               update! #$ ["mkdir" product]
-              clean! (when (mach.core/file-exists? product)
-                       #$ ["rmdir" product])}
+              clean! #$ ["rmdir" product]}
 
  classes {depends [classes-dir]
           novelty (mach.core/modified-since #ref [classes-dir product] "src")
@@ -41,5 +40,5 @@
                 #$$ ["jar uf" product novelty]
                 #$ ["jar cf" product #ref [classes-dir product]])}
 
- clean {depends [jar:clean]}
+;; clean {depends [jar:clean]}
  }

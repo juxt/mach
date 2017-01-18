@@ -31,3 +31,12 @@ not yet possible to specify verbs via a depends declaration.
 
 - Some AWS-specific functions added to core - these will be moved to a
   separate area once Mach is better structured.
+
+== [1.0.4]
+
+- Multiple verbs can be specified. E.g. `mach foo:bar:zip`
+
+- New verbs added: update and print - see README.md for details
+
+- If the target on the command line doesn't match a target, an attempt
+  is made to match on a target's product filename.

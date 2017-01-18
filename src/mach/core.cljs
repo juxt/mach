@@ -185,13 +185,14 @@
                                  (:value res)))]
 
                  ;; Call update!
-                 (if (or (not (map? recipe))
-                         (and (get recipe 'update!) (nil? (get recipe 'novelty)))
-                         (true? novelty)
-                         (when (seq? novelty) (not-empty novelty)))
+                 (when (or (not (map? recipe))
+                           (and (get recipe 'update!) (nil? (get recipe 'novelty)))
+                           (true? novelty)
+                           (when (seq? novelty) (not-empty novelty)))
 
                    (update! recipe novelty verb)))
 
+               ;; Unlikely, already checked this in resolve-target
                (throw (ex-info (str "No target: " target) {}))))))))
 
 ;; Run the update (or produce) and print, no deps
@@ -242,10 +243,35 @@
                   identity)]
          (:value res))))))
 
+(defn resolve-target
+  "Resolve target key (symbol) matching given target (string) in machfile."
+  [machfile target]
+  (if (contains? machfile (symbol target))
+    (symbol target)
+    ;; Else try to search for
+    (if-let [target
+             (some (fn [x]
+                     (let [[k v] x]
+                       (when (= target (get v 'product))
+                         k))
+                     ) machfile)]
+      (symbol target)
+      (throw (ex-info (str "Could not resolve target: " target) {})))))
+
 (defn build-target
   "Build a target, return true if work was done"
-  [machfile target:verb]
-  (let [tv (str target:verb)
+  [machfile target+verbs]
+
+  (let [[target & verbs] (str/split target+verbs ":")
+        target (resolve-target machfile target)]
+
+    (if verbs
+      (some identity (doall (for [verb verbs]
+                              (apply-verb machfile target (symbol verb)))))
+      (apply-verb machfile target nil)
+      ))
+
+  #_(let [tv (str target:verb)
         ;; TODO: Cope with multiverbs
         ix (.indexOf tv ":")]
     (if (pos? ix)
@@ -270,10 +296,6 @@
           (if-let [message (.-message e)]
             (println message)
             (println "Error:" e)))))))
-
-;; Misc
-
-
 
 (defmulti pre-process-json
   "Pre-process Clojure before JSON conversion according to a given

@@ -1,5 +1,14 @@
 #!/bin/bash
+#
+# Mach
+# Copyright © 2016-2017, JUXT LTD.
 
 MACH_HOME=${MACH_HOME:-$(npm -g root)/\@juxt/mach}
 
-lumo -c ${MACH_HOME}/src ${MACH_HOME}/src/mach/core.cljs $*
+if [ $# -gt 0 ]; then
+    ARGS=$*
+else
+    ARGS=main
+fi
+
+lumo -c ${MACH_HOME}/src ${MACH_HOME}/src/mach/core.cljs $ARGS

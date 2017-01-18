@@ -1,4 +1,3 @@
-[[mach]]
 = Mach
 
 In the beginning, we built code with custom shell scripts.
@@ -169,9 +168,9 @@ sass files in `sass` to `target/app.css`.
 
 Examine the file `Machfile.edn` in `test/`.
 
-This contains a map between targets and target recipes.
+This contains a map target entries, indexed by name.
 
-A recipe can be either an expression or map.
+A target can be either an expression or map.
 
 == Differences with make
 
@@ -209,14 +208,15 @@ last time _anything_ in the directory (or sub-directories) changed
 Mach allows you to write functions (in ClojureScript!) for determining
 novelty (i.e. whether a target is fresh or stale, and how so).
 
-== Recipes
+== Targets
 
-Machfile entries have target names (the keys) and recipes (actions or
-maps which describe when and how to build the target). If you use a map,
-you can put anything you like in this map, but keys with the `mach`
-namespace are reserved.
+Machfile entries have target names (the keys) and targets (actions or
+maps which describe when and how to build the target).
 
-A few of these keys are special:
+If you use a map, you can put anything you like in this map, but a few
+of these keys are special and are described below. Try to avoid using
+lowercase non-namespaced symbols, since these are reserved by Mach and
+some of these are discussed below.
 
 === summary
 
@@ -275,7 +275,7 @@ For example:
 {css {novelty (mach.core/modified-since "target/app.css" "sass")}}
 ----
 
-It is also possible to express this recipe like this:
+It is also possible to express this target like this:
 
 [source,clojure]
 ----
@@ -312,7 +312,7 @@ reduce work.
 
 === produce
 
-As an alternative to `update!`, a recipe can declare a `produce` entry.
+As an alternative to `update!`, a target can declare a `produce` entry.
 This should produce output that is normally written to the `product`
 file.
 
@@ -336,7 +336,7 @@ terms of other variables, and so on.
 
 Mach achieves DRY without endless indirection by using references (the
 same way https://github.com/juxt/aero[Aero] does it) - key values can be
-declared in a recipe and referenced from other parts of the Machfile,
+declared in a target and referenced from other parts of the Machfile,
 via the `#ref` tag literal.
 
 [source,clojure]
@@ -372,7 +372,7 @@ whether the target if fresh or not. No dependencies are called.
 
 === print
 
-For recipes that have a `produce`, this is called and output is sent to
+For targets that have a `produce`, this is called and output is sent to
 the console instead of the `product`.
 
 == Implicit clean

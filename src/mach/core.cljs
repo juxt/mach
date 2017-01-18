@@ -43,6 +43,11 @@
 (def fs (nodejs/require "fs"))
 (def child_process (nodejs/require "child_process"))
 
+(defn spit [f data]
+  (println "Writing" f)
+  (fs.writeFileSync f data))
+
+
 (defn file-exists? [f]
   (fs.existsSync f))
 
@@ -133,6 +138,38 @@
 (defmethod apply-verb :default [machfile target verb]
   (throw (ex-info (str "Unknown verb: '" verb "'") {})))
 
+(defn update! [recipe novelty verb]
+  (when (and (get recipe 'produce)
+             (get recipe 'update!))
+    (throw (ex-info "Invalid to have both update! and produce in the same recipe" {:recipe recipe})))
+
+  (let [code (resolve-symbols
+              ;; Expression
+              (if (map? recipe)
+                (or (get recipe 'produce)
+                    (get recipe 'update!)
+                    )
+                recipe)
+              ;; Scope
+              (if (map? recipe)
+                (merge
+                 recipe
+                 ;; Already computed novelty
+                 {'novelty `(quote ~novelty)})
+                ;; Just a expression, no scope
+                {}))]
+
+    (when-let [val (:value (cljs/eval repl/st code identity))]
+      ;; Print regardless
+      (cond
+        (= verb 'print) (println val)
+        :otherwise (when (get recipe 'produce)
+                     (when-let [product (get recipe 'product)]
+                       (spit product val)))))
+
+    ;; We did work so return true
+    true))
+
 (defmethod apply-verb nil [machfile target verb]
   (some identity
         (doall
@@ -152,31 +189,24 @@
                          (and (get recipe 'update!) (nil? (get recipe 'novelty)))
                          (true? novelty)
                          (when (seq? novelty) (not-empty novelty)))
-                   (let [code (resolve-symbols
-                               (if (map? recipe)
-                                 (get recipe 'update!)
-                                 recipe)
-                               (if (map? recipe)
-                                 (merge
-                                  recipe
-                                  ;; Already computed novelty
-                                  {'novelty `(quote ~novelty)})
-                                 {}))]
-                     (do
-                       (when-let [val (:value (cljs/eval repl/st code identity))]
-                         (println val))
 
-                       ;; We don't do this because we have spit instead
-                       #_(binding [*print-fn*
-                                   ;; Write to the product if it's declared
-                                   (if-let [product (get recipe 'product)]
-                                     (fn [x] (fs.writeFileSync product x))
-                                     *print-fn*)]
-                           (cljs/eval repl/st code identity))
-                       ;; We did work so return true
-                       true))))
+                   (update! recipe novelty verb)))
 
                (throw (ex-info (str "No target: " target) {}))))))))
+
+;; Run the update (or produce) and print, no deps
+(defmethod apply-verb 'update [machfile target verb]
+  (let [recipe (get machfile target)]
+    (if recipe
+      (update! recipe nil verb)
+      (throw (ex-info (str "No target: " target) {})))))
+
+;; Print the produce
+(defmethod apply-verb 'print [machfile target verb]
+  (let [recipe (get machfile target)]
+    (if recipe
+      (update! recipe nil verb)
+      (throw (ex-info (str "No target: " target) {})))))
 
 (defmethod apply-verb 'clean [machfile target verb]
   (doseq [target (order machfile target)
@@ -197,7 +227,7 @@
             :otherwise false)))))
   true)
 
-(defmethod apply-verb 'tree [machfile target verb]
+(defmethod apply-verb 'depends [machfile target verb]
   (pprint/pprint
    (order machfile target))
   true)
@@ -243,12 +273,32 @@
 
 ;; Misc
 
-(defn spit [f data]
-  (println "Writing" f)
-  (fs.writeFileSync f data))
 
-(defn json [foo]
-  (js/JSON.stringify (clj->js foo) nil 4))
+
+(defmulti pre-process-json
+  "Pre-process Clojure before JSON conversion according to a given
+  style"
+  (fn [v style]
+    (case style
+      :terraform :convert-dash-to-underscore)))
+
+(defmethod pre-process-json :default [v style]
+  v)
+
+(defmethod pre-process-json :convert-dash-to-underscore [v style]
+  (postwalk
+   (fn [x]
+     (if (and (vector? x) (= (count x) 2))
+       (let [[k v] x]
+         [(str/replace (name k) "-" "_") v])
+       x))
+   v))
+
+(defn json
+  ([v]
+   (json v :terraform))
+  ([v style]
+   (js/JSON.stringify (clj->js (pre-process-json v style)) nil 4)))
 
 ;; Main
 (mach (fs.readFileSync "Machfile.edn" "utf-8"))

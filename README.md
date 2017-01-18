@@ -214,7 +214,7 @@ map, you can put anything you like in this map, but keys with the
 
 A few of these keys are special:
 
-### description
+### summary
 
 A short string of descriptive text
 
@@ -300,6 +300,12 @@ In the `update!` expression can be side-effecting (and should
 be!). Often, an `update!` expression will reference the value of
 `novelty` to reduce work.
 
+### produce
+
+As an alternative to `update!`, a recipe can declare a `produce`
+entry. This should produce output that is normally written to the
+`product` file.
+
 ## Calling out to the shell
 
 One of the best design decisions in the original Make tool was to
@@ -346,7 +352,20 @@ For example:
 mach pdf:clean
 ```
 
-This calls the `pdf` target with the `clean` verb.
+### clean
+
+This calls the `pdf` target with the `clean` verb, which removes any
+files created by the target (declared in `product`).
+
+### update
+
+This calls the `update!` (or `produce`) expressions, regardless of
+whether the target if fresh or not. No dependencies are called.
+
+### print
+
+For recipes that have a `produce`, this is called and output is sent
+to the console instead of the `product`.
 
 ## Implicit clean
 

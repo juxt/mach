@@ -11,4 +11,4 @@ else
     ARGS=main
 fi
 
-lumo -c ${MACH_HOME}/src ${MACH_HOME}/src/mach/core.cljs $ARGS
+NODE_PATH="${MACH_HOME}/node_modules" lumo -c ${MACH_HOME}/src ${MACH_HOME}/src/mach/core.cljs $ARGS

@@ -98,7 +98,7 @@ likely to change in the near future.
 Install Mach with NPM like this
 
 ....
-$ sudo npm install -g @juxt/mach
+$ sudo npm install -g @juxt/mach lumo-cljs
 ....
 
 == Getting started

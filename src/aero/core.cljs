@@ -6,7 +6,9 @@
    [cljs.tools.reader :as r]
    [clojure.walk :refer [postwalk]]))
 
-;; Aero support This is mostly just copy-and-paste from Aero code When
+;; Aero support
+;;
+;; This is mostly just copy-and-paste from Aero code When
 ;; I've worked out how to include other cljs namespaces into a
 ;; lumo-based product, or even reference aero as a dependency, then
 ;; I'm sure JUXT will produce a cljs version of Aero we can use
@@ -29,6 +31,13 @@
   (cond (contains? value profile) (get value profile)
         (contains? value :default) (get value :default)
         :otherwise nil))
+
+(defmethod reader 'case
+  [opts tag [k choices]]
+  (let [v (get opts k)]
+    (cond (contains? choices v) (get choices v)
+          (contains? choices :default) (get choices :default)
+          :otherwise nil)))
 
 (defmethod reader 'user
   [{:keys [user]} tag value]
@@ -84,3 +93,7 @@
 (defmethod reader 'join
   [opts tag value]
   (apply str value))
+
+(defmethod reader 'uri
+  [opts tag value]
+  value)

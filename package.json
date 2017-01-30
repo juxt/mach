@@ -1,6 +1,6 @@
 {
   "name": "@juxt/mach",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "A remake of make",
   "main": "index.js",
   "directories": {

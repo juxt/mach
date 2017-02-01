@@ -62,6 +62,10 @@
   [opts tag value]
   (apply str value))
 
+(defmethod reader 'merge
+  [opts tag values]
+  (apply merge values))
+
 (defmethod reader 'aws-kms-decrypt
   [opts tag value]
   "XXX")

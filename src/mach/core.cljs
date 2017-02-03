@@ -310,9 +310,8 @@
 (defmethod pre-process-json :convert-dash-to-underscore [v style]
   (postwalk
    (fn [x]
-     (if (and (vector? x) (= (count x) 2))
-       (let [[k v] x]
-         [(str/replace (name k) "-" "_") v])
+     (if (map? x)
+       (zipmap (map #(str/replace (name %) "-" "_") (keys x)) (vals x))
        x))
    v))
 

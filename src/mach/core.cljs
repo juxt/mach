@@ -119,8 +119,9 @@
             expr))
 
 (defn sh [& args]
-  (apply println "$" args)
-  (let [result (.spawnSync child_process
+  (let [args (flatten args)
+        _  (apply println "$" args)
+        result (.spawnSync child_process
                            (first args)
                            (clj->js (map (comp #(str/replace % "'" "\\'")
                                                #(str/replace % "|" "\\|")) (rest args)
@@ -138,6 +139,19 @@
   `(when (not-empty ~vals) (apply sh ~@vals)))
 
 (reader/register-tag-parser! "$$" read-shell-apply)
+
+(defn ^:private run-extension [form args]
+  (postwalk (fn [v]
+              (type v)
+              (if (symbol? v)
+                (get args v v) v))
+            form))
+
+;; Register reader macro extensions
+(doseq [extensions-file (filter #(re-find #"\.mach\.edn$" %) (fs.readdirSync "."))]
+  (when (fs.existsSync extensions-file)
+    (doseq [[k form] (reader/read-string (fs.readFileSync extensions-file "utf-8"))]
+      (reader/register-tag-parser! (str k) (partial run-extension form)))))
 
 (defn resolve-refs [machfile]
   (fn [x]
@@ -268,8 +282,7 @@
     (if verbs
       (some identity (doall (for [verb verbs]
                               (apply-verb machfile target (symbol verb)))))
-      (apply-verb machfile target nil)
-      ))
+      (apply-verb machfile target nil)))
 
   #_(let [tv (str target:verb)
         ;; TODO: Cope with multiverbs

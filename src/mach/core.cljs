@@ -140,6 +140,11 @@
 
 (reader/register-tag-parser! "$$" read-shell-apply)
 
+(defn ^:private load-cljs [cljs-file]
+  `(lumo.repl/execute "file" ~cljs-file true true nil))
+
+(reader/register-tag-parser! "cljs" load-cljs)
+
 (defn ^:private run-extension [form args]
   (postwalk (fn [v]
               (type v)

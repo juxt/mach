@@ -315,29 +315,5 @@
             (println message)
             (println "Error:" e)))))))
 
-(defmulti pre-process-json
-  "Pre-process Clojure before JSON conversion according to a given
-  style"
-  (fn [v style]
-    (case style
-      :terraform :convert-dash-to-underscore)))
-
-(defmethod pre-process-json :default [v style]
-  v)
-
-(defmethod pre-process-json :convert-dash-to-underscore [v style]
-  (postwalk
-   (fn [x]
-     (if (map? x)
-       (zipmap (map #(str/replace (name %) "-" "_") (keys x)) (vals x))
-       x))
-   v))
-
-(defn json
-  ([v]
-   (json v :terraform))
-  ([v style]
-   (js/JSON.stringify (clj->js (pre-process-json v style)) nil 4)))
-
 ;; Main
 (mach (fs.readFileSync "Machfile.edn" "utf-8"))

@@ -140,23 +140,28 @@
 
 (reader/register-tag-parser! "$$" read-shell-apply)
 
-(defn ^:private load-cljs [cljs-file]
+(defn ^:private eval-cljs [cljs-file]
   `(lumo.repl/execute "file" ~cljs-file true true nil))
 
-(reader/register-tag-parser! "cljs" load-cljs)
+(reader/register-tag-parser! "eval" eval-cljs)
 
-(defn ^:private run-extension [form args]
-  (postwalk (fn [v]
-              (type v)
-              (if (symbol? v)
-                (get args v v) v))
-            form))
+(def ^:private extensions-cache (atom {}))
 
-;; Register reader macro extensions
-(doseq [extensions-file (filter #(re-find #"\.mach\.edn$" %) (fs.readdirSync "."))]
-  (when (fs.existsSync extensions-file)
-    (doseq [[k form] (reader/read-string (fs.readFileSync extensions-file "utf-8"))]
-      (reader/register-tag-parser! (str k) (partial run-extension form)))))
+(defn ^:private add-extension [extensions extension]
+  (let [extensions-file (str extension ".mach.edn")]
+    (assoc extensions extension (reader/read-string (fs.readFileSync extensions-file "utf-8")))))
+
+(defn import [[target args]]
+  (let [[extension k] (str/split (str target) "/")
+        extensions (or (get @extensions-cache extension)
+                       (get (swap! extensions-cache add-extension extension) extension))]
+    (postwalk (fn [v]
+                (type v)
+                (if (symbol? v)
+                  (get args v v) v))
+              (get extensions (symbol k)))))
+
+(reader/register-tag-parser! "import" import)
 
 (defn resolve-refs [machfile]
   (fn [x]

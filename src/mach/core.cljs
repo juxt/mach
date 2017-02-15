@@ -1,6 +1,7 @@
 ;; Copyright © 2016-2017, JUXT LTD.
 
 (ns mach.core
+  (:refer-clojure :exclude [import])
   (:require
    [cljs.nodejs :as nodejs]
    [cljs.pprint :as pprint]

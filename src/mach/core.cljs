@@ -142,7 +142,7 @@
 (reader/register-tag-parser! "$$" read-shell-apply)
 
 (defn ^:private eval-cljs [cljs-file]
-  `(lumo.repl/execute "file" ~cljs-file true true nil))
+  `[~::eval ~cljs-file])
 
 (reader/register-tag-parser! "eval" eval-cljs)
 
@@ -196,6 +196,14 @@
                  {'novelty `(quote ~novelty)})
                 ;; Just a expression, no scope
                 {}))]
+
+    (postwalk (fn [x]
+                (if (and (vector? x) (= ::eval (first x)))
+                  (do
+                    (lumo.repl/execute "file" (second x) true true nil)
+                    nil)
+                  x))
+              code)
 
     (when-let [val (:value (cljs/eval repl/st code identity))]
       ;; Print regardless

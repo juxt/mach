@@ -29,8 +29,8 @@
              (some (fn [x]
                      (let [[k v] x]
                        (when (= target (get v 'product))
-                         k))
-                     ) machfile)]
+                         k)))
+                   machfile)]
       (symbol target)
       (throw (ex-info (str "Could not resolve target: " target) {})))))
 
@@ -281,8 +281,6 @@
                   identity)]
          (:value res))))))
 
-
-
 (defn build-target
   "Build a target, return true if work was done"
   [machfile target+verbs]
@@ -293,16 +291,7 @@
     (if verbs
       (some identity (doall (for [verb verbs]
                               (apply-verb machfile target (symbol verb)))))
-      (apply-verb machfile target nil)))
-
-  #_(let [tv (str target:verb)
-        ;; TODO: Cope with multiverbs
-        ix (.indexOf tv ":")]
-    (if (pos? ix)
-      (let [target (symbol (subs tv 0 ix))
-            verb (symbol (subs tv (inc ix)))]
-        (apply-verb machfile target verb))
-      (apply-verb machfile target:verb nil))))
+      (apply-verb machfile target nil))))
 
 (defn mach [input]
   (let [targets (or (drop 5 (map symbol (.-argv nodejs/process))) ['default])]

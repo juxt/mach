@@ -311,16 +311,25 @@
                               (apply-verb machfile target (symbol verb)))))
       (apply-verb machfile target nil))))
 
+(defn- split-opts-and-args [opts args]
+  (let [[k v & rest-args] args]
+    (if (and k v (re-find #"^\-\w$" k))
+      (split-opts-and-args (assoc opts (keyword (.substring k 1)) v)
+                           rest-args)
+      [opts args])))
+
 (defn mach [input]
-  (let [targets (or (drop 5 (map symbol (.-argv nodejs/process))) ['default])]
-    (let [machfile (reader/read-string input)
-          machfile (postwalk (resolve-refs machfile) machfile)]
+  (let [[opts args] (split-opts-and-args {} (drop 5 (.-argv nodejs/process)))
+        targets (or (seq (map symbol args)) ['default])
+        machfile (get opts :f "Machfile.edn")]
+    (let [mach-config (reader/read-string (fs.readFileSync machfile "utf-8"))
+          mach-config (postwalk (resolve-refs mach-config) mach-config)]
       (try
         (binding [cljs/*eval-fn* repl/caching-node-eval]
           (when-not
               (some identity
                     (doall (for [target targets]
-                             (build-target machfile target))))
+                             (build-target mach-config target))))
             (println "Nothing to do!")))
 
         (catch :default e
@@ -329,4 +338,4 @@
             (println "Error:" e)))))))
 
 ;; Main
-(mach (fs.readFileSync "Machfile.edn" "utf-8"))
+(mach [])

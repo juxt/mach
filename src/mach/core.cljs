@@ -16,6 +16,7 @@
 ;; Sorting
 
 (def toposort (nodejs/require "toposort"))
+(def path (nodejs/require "path"))
 
 (defn resolve-target
   "Resolve target key (symbol) matching given target (string) in machfile."
@@ -59,7 +60,6 @@
 (defn spit [f data]
   (println "Writing" f)
   (fs.writeFileSync f data))
-
 
 (defn file-exists? [f]
   (fs.existsSync f))
@@ -146,14 +146,26 @@
 
 (def ^:private extensions-cache (atom {}))
 
+(defn find-extension-file
+  "Look for the extensions file. If it's not found in the current directory we look recursively through parent directories."
+  [filename dirs]
+  (when (> (count dirs) 1)
+    (or (let [f (clojure.string/join path.sep (concat dirs [filename]))]
+          (and (fs.existsSync f) f))
+        (find-extension-file filename (drop-last dirs)))))
+
 (defn ^:private add-extension [extensions extension]
-  (let [extensions-file (str extension ".mach.edn")]
-    (assoc extensions extension (reader/read-string (fs.readFileSync extensions-file "utf-8")))))
+  (if-let [extensions-file (find-extension-file (str extension ".mach.edn")
+                                                (clojure.string/split (path.resolve ".") path.sep))]
+    (assoc extensions extension (reader/read-string (fs.readFileSync extensions-file "utf-8")))
+    extensions))
 
 (defn import [[target args]]
   (let [[extension k] (str/split (str target) "/")
         extensions (or (get @extensions-cache extension)
                        (get (swap! extensions-cache add-extension extension) extension))]
+    (when-not extensions
+      (throw (js/Error. (str "Could not find extensions file for extension " extension))))
     (postwalk (fn [v]
                 (type v)
                 (if (symbol? v)

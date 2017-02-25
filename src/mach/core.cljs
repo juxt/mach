@@ -8,8 +8,6 @@
    [cljs.reader :as reader]
    [cljs.js :as cljs]
    [lumo.repl :as repl]
-   [aero.core :as aero]
-   aero.aws ; aero aws credentials reader
    [clojure.walk :refer [postwalk]]
    [clojure.string :as str]))
 

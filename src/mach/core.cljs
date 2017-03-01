@@ -137,6 +137,11 @@
 
 (reader/register-tag-parser! "$$" read-shell-apply)
 
+(defn add-classpath-path-file-to-sources [cp-file]
+  `[~::cp ~cp-file])
+
+(reader/register-tag-parser! "addcp"  add-classpath-path-file-to-sources)
+
 (defn ^:private eval-cljs [cljs-file]
   `[~::eval ~cljs-file])
 
@@ -205,10 +210,17 @@
                 ;; Just a expression, no scope
                 {}))]
 
+    ;; We do a post walk to ensure tha the classpath has everything it needs, prior to eval'ing
     (postwalk (fn [x]
                 (cond (and (vector? x) (= ::eval (first x)))
                       (do
                         (lumo.repl/execute "file" (second x) true true nil)
+                        nil)
+
+                      (and (vector? x) (= ::cp (first x)))
+                      (do
+                        ;; TODO make work in Windows use a diff separator
+                        (js/$$LUMO_GLOBALS.addSourcePaths (clojure.string/split (str (fs.readFileSync (second x))) ":"))
                         nil)
 
                       (and (list? x) (= 'require (first x)))
@@ -219,6 +231,7 @@
                       :else x))
               code)
 
+    ;; Eval the code
     (when-let [val (:value (cljs/eval repl/st code identity))]
       ;; Print regardless
       (cond

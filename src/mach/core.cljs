@@ -65,10 +65,8 @@
   (fs.existsSync f))
 
 (defn last-modified [f]
-  (if f
-    (if (file-exists? f)
-      (.getTime (.-mtime (fs.statSync f)))
-      0)
+  (if (and f (file-exists? f))
+    (.getTime (.-mtime (fs.statSync f)))
     0))
 
 (defn modified-since? [since f]

@@ -208,11 +208,17 @@
                 {}))]
 
     (postwalk (fn [x]
-                (if (and (vector? x) (= ::eval (first x)))
-                  (do
-                    (lumo.repl/execute "file" (second x) true true nil)
-                    nil)
-                  x))
+                (cond (and (vector? x) (= ::eval (first x)))
+                      (do
+                        (lumo.repl/execute "file" (second x) true true nil)
+                        nil)
+
+                      (and (list? x) (= 'require (first x)))
+                      (do
+                        (lumo.repl/execute "text" (str x) true true nil)
+                        nil)
+
+                      :else x))
               code)
 
     (when-let [val (:value (cljs/eval repl/st code identity))]

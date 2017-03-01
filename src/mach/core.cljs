@@ -225,7 +225,7 @@
 
                       (and (list? x) (= 'require (first x)))
                       (do
-                        (lumo.repl/execute "text" (str x) true true nil)
+                        (lumo.repl/execute "text" (str x) true false nil)
                         nil)
 
                       :else x))

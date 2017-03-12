@@ -137,10 +137,15 @@
 
 (reader/register-tag-parser! "$$" read-shell-apply)
 
-(defn add-classpath-path-file-to-sources [cp-file]
+(defn add-classpath-path-to-sources [cp-file]
   `[~::cp ~cp-file])
 
-(reader/register-tag-parser! "addcp"  add-classpath-path-file-to-sources)
+(reader/register-tag-parser! "cp"  add-classpath-path-to-sources)
+
+(defn add-classpath-path-file-to-sources [cp-file]
+  `[~::cp-file ~cp-file])
+
+(reader/register-tag-parser! "cpfile"  add-classpath-path-file-to-sources)
 
 (defn ^:private eval-cljs [cljs-file]
   `[~::eval ~cljs-file])
@@ -218,6 +223,12 @@
                         nil)
 
                       (and (vector? x) (= ::cp (first x)))
+                      (do
+                        ;; TODO make work in Windows use a diff separator
+                        (js/$$LUMO_GLOBALS.addSourcePaths [(second x)])
+                        nil)
+
+                      (and (vector? x) (= ::cp-file (first x)))
                       (do
                         ;; TODO make work in Windows use a diff separator
                         (js/$$LUMO_GLOBALS.addSourcePaths (clojure.string/split (str (fs.readFileSync (second x))) ":"))

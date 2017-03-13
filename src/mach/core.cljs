@@ -239,6 +239,13 @@
                         (lumo.repl/execute "text" (str x) true false nil)
                         nil)
 
+                      ;; Auto require
+                      (and (list? x) (symbol? (first x)) (namespace (first x)))
+                      (do
+                        (cljs/eval repl/st `(require '~(symbol (namespace (first x)))) identity)
+                        nil)
+
+
                       :else x))
               code)
 

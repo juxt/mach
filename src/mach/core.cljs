@@ -241,10 +241,10 @@
 
                       ;; Auto require
                       (and (list? x) (symbol? (first x)) (namespace (first x)))
-                      (do
-                        (cljs/eval repl/st `(require '~(symbol (namespace (first x)))) identity)
+                      (let [ns (symbol (namespace (first x)))]
+                        (when-not (find-ns ns)
+                          (cljs/eval repl/st `(require '~ns) identity))
                         nil)
-
 
                       :else x))
               code)

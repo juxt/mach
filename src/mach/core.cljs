@@ -101,6 +101,10 @@
      dir)
     []))
 
+(defn ensure-mach-dir-exists []
+  (when-not (fs.existsSync ".mach")
+    (fs.mkdirSync ".mach" 0744)))
+
 (defn modified-since [anchor source]
   (filter
    (partial modified-since? (apply max (conj (map last-modified (filter file? (file-seq anchor))) 0)))
@@ -121,8 +125,7 @@
         result (.spawnSync child_process
                            (first args)
                            (clj->js (map (comp #(str/replace % "'" "\\'")
-                                               #(str/replace % "|" "\\|")) (rest args)
-                                         ))
+                                               #(str/replace % "|" "\\|")) (rest args)))
                            #js {"shell" true})]
     (println (str (.-stdout result)))
     (println (str (.-stderr result)))))
@@ -370,6 +373,20 @@
   (for [[extension props] extensions
         [ext-k ext-target] (load-extension extension)]
     [ext-k (map-props-onto-extension-target ext-target props)]))
+
+(defmethod apply-mach-preprocess :m2 [machfile _ deps]
+  (ensure-mach-dir-exists)
+  (let [cp-file ".mach/cp"
+        result (.spawnSync child_process
+                           "boot"
+                           (clj->js (concat (mapv (fn [[sym v]] (str "-d " sym ":" (or v "RELEASE"))) deps)
+                                            ["with-cp" "--write" "--file" cp-file]))
+                           #js {"shell" true})]
+    (when-not (and (= 0 (.-status result)) (fs.existsSync cp-file))
+      (throw (js/Error. (str "Could not write classpath to " cp-file))))
+
+    (js/$$LUMO_GLOBALS.addSourcePaths (clojure.string/split (str (fs.readFileSync cp-file)) ":")))
+  nil)
 
 (defmethod apply-mach-preprocess :default [machfile verb target]
   (throw (ex-info (str "Unknown preprocess target: '" verb "'") {})))

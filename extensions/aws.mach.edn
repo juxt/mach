@@ -1,0 +1,1 @@
+{ips #$ ["aws" "ec2" "--output" "text" "--query" "Reservations[].Instances[].[Tags[?Key=='Name'].Value|[0],PublicIpAddress]" "--filters=Name=instance-state-name,Values=running" "--profile" profile "describe-instances"]}

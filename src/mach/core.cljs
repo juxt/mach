@@ -374,10 +374,9 @@
         [ext-k ext-target] (load-extension extension)]
     [ext-k (map-props-onto-extension-target ext-target props)]))
 
-(defmethod apply-mach-preprocess :m2 [machfile _ deps]
-  (ensure-mach-dir-exists)
-  (let [cp-file ".mach/cp"
-        result (.spawnSync child_process
+(defn- write-classpath [cp-file cp-hash-file deps]
+  (println "Writing Mach classpath to" cp-file)
+  (let [result (.spawnSync child_process
                            "boot"
                            (clj->js (concat (mapv (fn [[sym v]] (str "-d " sym ":" (or v "RELEASE"))) deps)
                                             ["with-cp" "--write" "--file" cp-file]))
@@ -385,6 +384,15 @@
     (when-not (and (= 0 (.-status result)) (fs.existsSync cp-file))
       (throw (js/Error. (str "Could not write classpath to " cp-file))))
 
+    (fs.writeFileSync cp-hash-file (hash deps))))
+
+(defmethod apply-mach-preprocess :m2 [machfile _ deps]
+  (ensure-mach-dir-exists)
+  (let [cp-file ".mach/cp"
+        cp-hash-file ".mach/cp-hash"]
+    (when-not (and (fs.existsSync cp-hash-file)
+                   (= (hash deps) (reader/read-string (fs.readFileSync cp-hash-file "utf-8"))))
+      (write-classpath cp-file cp-hash-file deps))
     (js/$$LUMO_GLOBALS.addSourcePaths (clojure.string/split (str (fs.readFileSync cp-file)) ":")))
   nil)
 

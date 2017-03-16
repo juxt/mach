@@ -146,21 +146,27 @@
 (reader/register-tag-parser! "$$" read-shell-apply)
 
 (defn add-classpath-path-to-sources [cp-file]
-  `[~::cp ~cp-file])
+  ;; TODO make work in Windows use a diff separator
+  (js/$$LUMO_GLOBALS.addSourcePaths [cp-file])
+  `[])
 
 (reader/register-tag-parser! "cp"  add-classpath-path-to-sources)
 
 (defn add-classpath-path-file-to-sources [cp-file]
-  `[~::cp-file ~cp-file])
+   (js/$$LUMO_GLOBALS.addSourcePaths (clojure.string/split (str (fs.readFileSync cp-file)) ":"))
+  `[])
 
 (reader/register-tag-parser! "cpfile"  add-classpath-path-file-to-sources)
 
 (defn ^:private eval-cljs [cljs-file]
-  `[~::eval ~cljs-file])
+  (lumo.repl/execute "file" cljs-file true true nil)
+  `[])
 
 (reader/register-tag-parser! "eval" eval-cljs)
 
 (def ^:private extensions-cache (atom {}))
+
+(declare preprocess)
 
 (defn find-extension-file
   "Look for the extensions file. If it's not found in the current directory we look recursively through parent directories."
@@ -173,7 +179,7 @@
 (defn ^:private read-extension-file [extension]
   (when-let [extensions-file (find-extension-file (str extension ".mach.edn")
                                                   (clojure.string/split (path.resolve ".") path.sep))]
-    (reader/read-string (fs.readFileSync extensions-file "utf-8"))))
+    (preprocess (reader/read-string (fs.readFileSync extensions-file "utf-8")))))
 
 (defn ^:private fetch-extension-file [extension]
   (ensure-mach-extensions-dir-exists)
@@ -257,24 +263,7 @@
 
     ;; We do a post walk to ensure tha the classpath has everything it needs, prior to eval'ing
     (postwalk (fn [x]
-                (cond (and (vector? x) (= ::eval (first x)))
-                      (do
-                        (lumo.repl/execute "file" (second x) true true nil)
-                        nil)
-
-                      (and (vector? x) (= ::cp (first x)))
-                      (do
-                        ;; TODO make work in Windows use a diff separator
-                        (js/$$LUMO_GLOBALS.addSourcePaths [(second x)])
-                        nil)
-
-                      (and (vector? x) (= ::cp-file (first x)))
-                      (do
-                        ;; TODO make work in Windows use a diff separator
-                        (js/$$LUMO_GLOBALS.addSourcePaths (clojure.string/split (str (fs.readFileSync (second x))) ":"))
-                        nil)
-
-                      (and (list? x) (= 'require (first x)))
+                (cond (and (list? x) (= 'require (first x)))
                       (do
                         (lumo.repl/execute "text" (str x) true false nil)
                         nil)
@@ -396,6 +385,10 @@
 (defmulti apply-mach-preprocess
   "Preprocess Machfile with available configurations"
   (fn [machfile verb target] verb))
+
+(defmethod apply-mach-preprocess :init [machfile verb target]
+  (cljs/eval repl/st target identity)
+  nil)
 
 (defmethod apply-mach-preprocess :import [machfile verb extensions]
   (for [[extension props] extensions

@@ -284,7 +284,7 @@
                    (update! target novelty verb)))
 
                ;; Unlikely, already checked this in resolve-target
-               (throw (ex-info (str "No target: " target) {}))))))))
+               (throw (ex-info (str "Target not found: " target-name) {}))))))))
 
 ;; Run the update (or produce) and print, no deps
 (defmethod apply-verb 'update [machfile target-name verb]

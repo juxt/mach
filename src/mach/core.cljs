@@ -168,17 +168,26 @@
     (assoc extensions extension (reader/read-string (fs.readFileSync extensions-file "utf-8")))
     extensions))
 
-(defn import [[target args]]
-  (let [[extension k] (str/split (str target) "/")
-        extensions (or (get @extensions-cache extension)
+(defn- load-extension [extension]
+  (let [extensions (or (get @extensions-cache extension)
                        (get (swap! extensions-cache add-extension extension) extension))]
     (when-not extensions
       (throw (js/Error. (str "Could not find extensions file for extension " extension))))
-    (postwalk (fn [v]
-                (type v)
-                (if (symbol? v)
-                  (get args v v) v))
-              (get extensions (symbol k)))))
+    extensions))
+
+(defn- map-props-onto-extension-target [target props]
+  (postwalk (fn [v]
+              (type v)
+              (if (symbol? v)
+                (get props v v) v))
+            target))
+
+(defn import [[target args]]
+  (let [[extension k] (str/split (str target) "/")]
+    (-> extension
+        load-extension
+        (get (symbol k))
+        (map-props-onto-extension-target args))))
 
 (reader/register-tag-parser! "import" import)
 
@@ -353,12 +362,31 @@
                            rest-args)
       [opts args])))
 
+(defmulti apply-mach-preprocess
+  "Preprocess Machfile with available configurations"
+  (fn [machfile verb target] verb))
+
+(defmethod apply-mach-preprocess :import [machfile verb extensions]
+  (for [[extension props] extensions
+        [ext-k ext-target] (load-extension extension)]
+    [ext-k (map-props-onto-extension-target ext-target props)]))
+
+(defmethod apply-mach-preprocess :default [machfile verb target]
+  (throw (ex-info (str "Unknown preprocess target: '" verb "'") {})))
+
+(defn preprocess [machfile]
+  (reduce into {}
+        (for [[k v] machfile]
+          (if-let [verb (keyword (last (re-find #"^mach/(\w+)" (str k))))]
+            (apply-mach-preprocess machfile verb v)
+            [[k v]]))))
+
 (defn mach [input]
   (let [[opts args] (split-opts-and-args {} (drop 5 (.-argv nodejs/process)))
         targets (or (seq (map symbol args)) ['default])
         machfile (get opts :f "Machfile.edn")]
     (let [mach-config (reader/read-string (fs.readFileSync machfile "utf-8"))
-          mach-config (postwalk (resolve-refs mach-config) mach-config)]
+          mach-config (preprocess (postwalk (resolve-refs mach-config) mach-config))]
       (try
         (binding [cljs/*eval-fn* repl/caching-node-eval]
           (when-not

@@ -1,0 +1,15 @@
+{get {depends [tfjson]
+      update! #$ ["terraform" "get" ">" "/dev/null"]}
+
+ plan {depends [get]
+       product "proposed.plan"
+       update! #$ ["terraform" "plan" (for [f configs] ["-var-file" f]) "-out" product]
+       clean! #$ ["rm" product]}
+
+ apply {update! #$ ["terraform" "apply" #ref [plan product]]}
+
+ remote-config #$ ["terraform" "remote" "config" "-backend=s3" (str "-backend-config=\"bucket=" bucket "\"")  "-backend-config=\"key=terraform.tfstate\"" "-backend-config=\"region=eu-west-1\"" "-backend-config=\"encrypt=true\"" (if (not-empty aws-profile) (str "-backend-config=\"profile=" aws-profile "\"") "")]
+
+ plan-destroy #$ ["terraform" "plan" "-destroy" (for [f configs] ["-var-file" f])]
+
+ destroy #$ ["terraform" "destroy" (for [f configs] ["-var-file" f])]}

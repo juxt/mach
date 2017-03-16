@@ -105,6 +105,11 @@
   (when-not (fs.existsSync ".mach")
     (fs.mkdirSync ".mach" 0744)))
 
+(defn ensure-mach-extensions-dir-exists []
+  (ensure-mach-dir-exists)
+  (when-not (fs.existsSync ".mach/extensions")
+    (fs.mkdirSync ".mach/extensions" 0744)))
+
 (defn modified-since [anchor source]
   (filter
    (partial modified-since? (apply max (conj (map last-modified (filter file? (file-seq anchor))) 0)))
@@ -165,11 +170,34 @@
           (and (fs.existsSync f) f))
         (find-extension-file filename (drop-last dirs)))))
 
+(defn ^:private read-extension-file [extension]
+  (when-let [extensions-file (find-extension-file (str extension ".mach.edn")
+                                                  (clojure.string/split (path.resolve ".") path.sep))]
+    (reader/read-string (fs.readFileSync extensions-file "utf-8"))))
+
+(defn ^:private fetch-extension-file [extension]
+  (ensure-mach-extensions-dir-exists)
+
+  (let [extensions-file (str ".mach/extensions/" (hash extension))]
+    (when-not (fs.existsSync extensions-file)
+      (let [result (.spawnSync child_process
+                               "curl"
+                               (clj->js ["-o" extensions-file extension])
+                               #js {"shell" true})]
+        (when-not (and (= 0 (.-status result)) (fs.existsSync extensions-file))
+              (println (str (.-stdout result)))
+              (println (str (.-stderr result)))
+
+          (throw (js/Error. (str "Could not fetch extension " extensions-file))))))
+
+    (reader/read-string (fs.readFileSync extensions-file "utf-8"))))
+
 (defn ^:private add-extension [extensions extension]
-  (if-let [extensions-file (find-extension-file (str extension ".mach.edn")
-                                                (clojure.string/split (path.resolve ".") path.sep))]
-    (assoc extensions extension (reader/read-string (fs.readFileSync extensions-file "utf-8")))
-    extensions))
+  (assoc extensions extension (cond (and (string? extension) (re-find #"^https?://.*" extension))
+                                    (fetch-extension-file extension)
+
+                                    :default
+                                    (read-extension-file extension))))
 
 (defn- load-extension [extension]
   (let [extensions (or (get @extensions-cache extension)

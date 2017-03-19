@@ -228,11 +228,12 @@
 
 (reader/register-tag-parser! "import" import)
 
-(defn resolve-refs [machfile]
-  (fn [x]
-    (if (instance? Reference x)
-      (get-in machfile (:path x))
-      x)))
+(defn resolve-refs [mach-config]
+  (postwalk (fn [x]
+              (if (instance? Reference x)
+                (get-in mach-config (:path x))
+                x))
+            mach-config))
 
 (defmulti apply-verb
   "Return boolean to indicate if work was done (true) or not (false)"
@@ -432,7 +433,7 @@
         targets (or (seq (map symbol args)) ['default])
         machfile (get opts :f "Machfile.edn")]
     (let [mach-config (reader/read-string (fs.readFileSync machfile "utf-8"))
-          mach-config (preprocess (postwalk (resolve-refs mach-config) mach-config))]
+          mach-config (->> mach-config preprocess resolve-refs)]
       (try
         (binding [cljs/*eval-fn* repl/caching-node-eval]
           (when-not

@@ -277,19 +277,31 @@ print-config (println (aero.core/read-config "config.edn" {}))
 
 The `m2` directive uses https://github.com/boot-clj/boot[Boot] to
 fetch Maven dependencies and to inject these dependencies directly
-onto the Lumo/Mach classpath (only performing this when the declared
-dependencies vector have changed).
+onto the Lumo/Mach classpath. Note, Boot is only invoked when the
+declared dependencies vector has changed.
 
 For this to work therefore you must have Boot installed, and
-unfortunately for now, a soon-to-be released unrelgeased version of
-Lumo, available link:lumo[here].
+unfortunately for now, a soon-to-be released version of
+Lumo, built for Linux and available link:lumo[here].
 
 Note that Mach auto-requires namespaces, so in this example we do not
 need `(require 'aero.core)`.
 
+=== Add to the Lumo/Mach classpath
+
+You can add artbitrary directories and files to the Mach/Lumo classpath using the `cp` literal, for example:
+
+[source,clojure]
+----
+{
+add-cp #cp "some-dir-containing-cljs"
+}
+----
+
 === Mach Extensions
 
-You add extensions to Mach using the `mach/import` directive. For example:
+Mach extensions allow us to create reusable tasks, using the
+`mach/import` directive. For example:
 
 [source,clojure]
 ----
@@ -300,11 +312,13 @@ mach/import [["https://raw.githubusercontent.com/juxt/mach/master/extensions/aws
 }
 ----
 
-Mach extensions allow us to create reusable tasks. For example, importing the Terraform extension as above adds to Mach standard Terraform targets such as 'plan' and 'apply', that can then simply be executed from the command line, i.e. `mach plan`.
+Importing the Terraform extension as above adds to Mach standard Terraform targets such as 'plan' and 'apply', that can then simply be executed from the command line, i.e. `mach plan`.
 
 For more examples of extensions, checkout the https://github.com/juxt/roll[Roll] link:extensions/roll.mach.edn[extension] for Blue/Green Terraform application deployments.
 
-Note that the `mach/import` directive imports all targets from the extension. If you want more fine grained control, use the `#import` tag literal. For example:
+=== Import literal
+
+The the `mach/import` directive imports all targets from the extension. If you want more fine grained control, use the `#import` tag literal. For example:
 
 [source,clojure]
 ----
@@ -313,7 +327,7 @@ tar #import [foo/bar {}]
 }
 ----
 
-And Mach will search this current directory - and also parent directories - for an extension file called foo.mach.edn. Once the extensions file is found Mach will load the extension targets.
+In this case Mach will search this current directory - and also parent directories - for an extension file called foo.mach.edn. Once the extensions file is found Mach will load the extension targets.
 
 If foo.mach.edn contained:
 

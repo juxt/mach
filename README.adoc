@@ -1,83 +1,8 @@
 = Mach
 
-In the beginning, we built code with custom shell scripts.
-
-The problem with shell scripts was they tended to be dumb, knowing only
-how to build the entire project from scratch.
-
-Then along came Make, which was a particularly great tool for building
-code.
-
-https://www.youtube.com/watch?v=jzDbiP_xbYo[YouTube demo]
-
-== Make: The Good, the Bad and the Ugly
-
-The good parts of make were very good:
-
-* incremental builds
-* suffix rules
-
-By deductions based off the modification times of source and object
-files, make would quickly identify where work was needed to be done, and
-go ahead and do it. Unlike shell scripts, make was optimised around the
-goal of building code incrementally.
-
-Make was built around the concept of dependencies:
-
-....
-a.o:   b.c c.c
-       cc -o a.o b.c c.c
-....
-
-Here, b.c and c.c might be source files. If either of them were newer
-than a.o, or if a.o didn't exist, then the command `cc -o a.o b.c c.c`
-would be run.
-
-You could rewrite this make target using 'automatic variables' like
-this:
-
-....
-a.o:   b.c c.c
-       cc -o $@ $?
-....
-
-Make goes downhill rapidly from here, forcing you to learn a ton of
-stuff that nowadays looks and feels antiquated.
-
-But Make was very flexible, and could be used to build almost anything
-that could be expressed in dependency and target files.
-
-Unfortunately, make syntax was baroque. Make relied on unintuitive
-'features' whenever it needed to compute something, manipulate strings
-or lists, and even required tabs in the right places, and might silently
-fail if you forgot the rules.
-
-Make was also not designed for the hierarchical file system used by Java
-and others, and for this reason other tools such as Ant, Ivy, Maven and
-Gradle came along and supplanted Make. However, these tools tended to go
-back to the idea that it was good to build code from scratch, and people
-got used to the idea that it was OK to wait ages for something to build.
-Instead of fixing the problem, they swept the problem away under an
-out-of-sight build machine or 'continuous integration' server, turning
-adversity into virtue.
-
-Then Clojure came along and people built things like Leiningen and boot.
-These suffer from painfully slow start-up times. Leiningen is really a
-Clojure launch tool rather than a build tool. Boot's name at least
-indicates what it's best for: booting a powerful development
-environment.
-
-== Introducing Mach
-
 Mach is a remake of make, striving to keep the good parts.
 
-=== Sprichst Du Deutsch?
-
-Since you ask, the name is from the German verb, _machen_ (to do, to
-make), used in the imperative. Mach is as much about 'doing' as
-'making', which the German verb captures well.
-
-=== Design goals
+== Design goals
 
 * Fast start-up (ideally sub-second)
 * Incremental builds (only do necessary work)
@@ -85,7 +10,12 @@ make), used in the imperative. Mach is as much about 'doing' as
 * Support rules and extensibility
 
 For the language, we have chosen ClojureScript because it is clean,
-consistent, expressive and powerful.
+consistent, expressive and powerful. Machfiles as data, using the EDN
+format.
+
+Mach sits on the extensive nodejs eco-system. If you need to do anything
+remotely complex, feel free to pick from the quarter-million-plus
+modules available to you.
 
 == Status
 
@@ -103,7 +33,9 @@ $ sudo npm install -g @juxt/mach lumo-cljs
 
 == Getting started
 
-Create a simple project and add a Machfile.edn file.
+Create a simple project and add a Machfile.edn file. The Machfile is a
+simple map, modelled in a similar fashion to the original Makefile,
+with targets as keys and dependencies/actions as values.
 
 Your very first Machfile.edn might look like this:
 
@@ -164,50 +96,6 @@ $ mach css
 If you have the SASS compiler installed, `sassc`, this will compile the
 sass files in `sass` to `target/app.css`.
 
-== Machfile syntax
-
-Examine the file `Machfile.edn` in `test/`.
-
-This contains a map target entries, indexed by name.
-
-A target can be either an expression or map.
-
-== Differences with make
-
-=== EDN format
-
-Machfiles are data, and we have chosen the EDN format. If the only
-reason EDN was better than JSON was because it allows comments, that
-would be reason enough to choose it. It has many other advantages
-though.
-
-The Machfile is a map, modelled in a similar fashion to the original
-Makefile, with targets as keys and dependencies/actions as values.
-
-=== Targets
-
-In Make, targets were intended to be files. However, you'd often want a
-task such as 'clean'. To ensure Make wouldn't confuse 'clean' with a
-target file, you would have to declare clean in a `.PROXY` declaration,
-one of many of Makes esoteric conventions.
-
-With mach, consistency is favoured over terseness. All keys are names,
-not target files. Target files are specified in the values, where
-necessary.
-
-=== Novelty detection
-
-Using symbols for targets, rather than files, solves another problem
-with Make: support for directories.
-
-In Unix, a directory's modification time reflects the last time a
-directory was modified (files were added or removed), rather than the
-last time _anything_ in the directory (or sub-directories) changed
-(which is what you usually want for determining novelty).
-
-Mach allows you to write functions (in ClojureScript!) for determining
-novelty (i.e. whether a target is fresh or stale, and how so).
-
 == Targets
 
 Machfile entries have target names (the keys) and targets (actions or
@@ -217,15 +105,6 @@ If you use a map, you can put anything you like in this map, but a few
 of these keys are special and are described below. Try to avoid using
 lowercase non-namespaced symbols, since these are reserved by Mach and
 some of these are discussed below.
-
-=== summary
-
-A short string of descriptive text
-
-[source,clojure]
-----
-{css {summary "CSS for the website, compiled from sass sources"}}
-----
 
 === depends
 
@@ -316,40 +195,6 @@ As an alternative to `update!`, a target can declare a `produce` entry.
 This should produce output that is normally written to the `product`
 file.
 
-== Calling out to the shell
-
-One of the best design decisions in the original Make tool was to
-integrate closely with the Unix shell. There are countless operations
-that are accessible via the shell, and Mach strives to encourage this
-usage via its custom EDN tag literal `#$`.
-
-`clojure {hello-internal (println "Hello World!")  hello-external #$ ["echo Hello!"]}`
-
-The `#$` tag literal is a short-cut to the built-in Mach function
-`mach.core/sh`.
-
-== References
-
-Make makes heavy use of _variables_, in the spirit of DRY (Don't Repeat
-Yourself). Often, this leads to obfuscation, variables are defined in
-terms of other variables, and so on.
-
-Mach achieves DRY without endless indirection by using references (the
-same way https://github.com/juxt/aero[Aero] does it) - key values can be
-declared in a target and referenced from other parts of the Machfile,
-via the `#ref` tag literal.
-
-[source,clojure]
-----
-{
-src {dir "src"}
-classes {update! (compile #ref [src dir])}
-}
-----
-
-The `#ref` tag must be followed by a vector of symbols which target the
-required value.
-
 == Verbs
 
 A target can optionally be called with a verb.
@@ -375,39 +220,59 @@ whether the target if fresh or not. No dependencies are called.
 For targets that have a `produce`, this is called and output is sent to
 the console instead of the `product`.
 
-== Implicit clean
+=== Implicit clean
 
 Since derived files are declared with `product`, Mach is able to
 automatically determine how to clean a target. Therefore, you don't need
 to specify a special rule, conventionally called `clean`, to clean up
 derived files.
 
-== Works with Aero
+== Additional Features
 
-Mach can read https://github.com/juxt/aero[Aero] (EDN) config files.
-Aero is an ideal solution for storing the configuration data that drives
-build processes because it allows comments, supports the specification
-of multiple environments together in version control and has extension
-points for powerful customisation.
+=== Calling out to the shell
 
-`(mach.core/read-config "config.edn" {:profile :prod})`
+One of the best design decisions in the original Make tool was to
+integrate closely with the Unix shell. There are countless operations
+that are accessible via the shell, and Mach strives to encourage this
+usage via its custom EDN tag literal `#$`.
 
-This opens up the possibillity to keep all your data in Aero and use the
-same data in your application, build and (dev)ops. Don't repeat yourself
-(DRY) for configuration up and down your stack.
+`clojure {hello-internal (println "Hello World!")  hello-external #$ ["echo Hello!"]}`
 
-Status: experimental and incomplete
+The `#$` tag literal is a short-cut to the built-in Mach function
+`mach.core/sh`.
 
-== Built on nodejs
+=== References
 
-Mach sits on the extensive nodejs eco-system. If you need to do anything
-remotely complex, feel free to pick from the quarter-million-plus
-modules available to you.
+Make makes heavy use of _variables_, in the spirit of DRY (Don't Repeat
+Yourself). Often, this leads to obfuscation, variables are defined in
+terms of other variables, and so on.
+
+Mach achieves DRY without endless indirection by using references (the
+same way https://github.com/juxt/aero[Aero] does it) - key values can be
+declared in a target and referenced from other parts of the Machfile,
+via the `#ref` tag literal.
+
+[source,clojure]
+----
+{
+src {dir "src"}
+classes {update! (compile #ref [src dir])}
+}
+----
+
+The `#ref` tag must be followed by a vector of symbols which target the
+required value.
 
 == Acknowledgements
 
 Mach is built on https://github.com/anmonteiro/lumo[lumo] by António
 Nuno Monteiro.
+
+== Sprichst Du Deutsch?
+
+Since you ask, the name is from the German verb, _machen_ (to do, to
+make), used in the imperative. Mach is as much about 'doing' as
+'making', which the German verb captures well.
 
 == Influences
 

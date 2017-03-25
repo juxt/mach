@@ -263,6 +263,30 @@ classes {update! (compile #ref [src dir])}
 The `#ref` tag must be followed by a vector of symbols which target the
 required value.
 
+=== Using ClojureScript dependencies
+
+You can use other ClojureScript libraries in your Machfile, for example
+
+[source,clojure]
+----
+{
+mach/m2 [[aero "1.1.2"]]
+print-config (println (aero.core/read-config "config.edn" {}))
+}
+----
+
+The `m2` directive uses https://github.com/boot-clj/boot[Boot] to
+fetch Maven dependencies and to inject these dependencies directly
+onto the Lumo/Mach classpath (only performing this when the declared
+dependencies vector have changed).
+
+For this to work therefore you must have Boot installed, and
+unfortunately for now, a soon-to-be released unrelgeased version of
+Lumo, available link:lumo[here].
+
+Note that Mach auto-requires namespaces, so in this example we do not
+need `(require 'aero.core)`.
+
 == Acknowledgements
 
 Mach is built on https://github.com/anmonteiro/lumo[lumo] by António

@@ -287,6 +287,59 @@ Lumo, available link:lumo[here].
 Note that Mach auto-requires namespaces, so in this example we do not
 need `(require 'aero.core)`.
 
+=== Mach Extensions
+
+You add extensions to Mach using the `mach/import` directive. For example:
+
+[source,clojure]
+----
+{
+mach/import [["https://raw.githubusercontent.com/juxt/mach/master/extensions/aws.mach.edn" {profile "kermit"}]
+             ["https://raw.githubusercontent.com/juxt/mach/master/extensions/terraform.mach.edn"
+              {aws-profile "kermit" bucket "some-bucket" configs []}]]
+}
+----
+
+Mach extensions allow us to create reusable tasks. For example, importing the Terraform extension as above adds to Mach standard Terraform targets such as 'plan' and 'apply', that can then simply be executed from the command line, i.e. `mach plan`.
+
+For more examples of extensions, checkout the https://github.com/juxt/roll[Roll] link:extensions/roll.mach.edn[extension] for Blue/Green Terraform application deployments.
+
+Note that the `mach/import` directive imports all targets from the extension. If you want more fine grained control, use the `#import` tag literal. For example:
+
+[source,clojure]
+----
+{
+tar #import [foo/bar {}]
+}
+----
+
+And Mach will search this current directory - and also parent directories - for an extension file called foo.mach.edn. Once the extensions file is found Mach will load the extension targets.
+
+If foo.mach.edn contained:
+
+[source,clojure]
+----
+{bar #$ ["echo" "hello"]}
+----
+
+Then the target 'bar' in the extension file will be aliased to 'tar' in the main Mach file. So running mach tar from the command line would echo hello.
+
+Furthermore, any symbols in the target extension can be rewritten based on the supplied map of args. For example if the bar target was coded as such:
+
+[source,clojure]
+----
+{bar #$ ["echo" fido]}
+----
+
+And bar was imported as such:
+
+[source,clojure]
+----
+{tar #import [foo/bar {fido "greetings"}]}
+----
+
+then running mach tar from the command line would echo the string "greetings".
+
 == Acknowledgements
 
 Mach is built on https://github.com/anmonteiro/lumo[lumo] by António

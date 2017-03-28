@@ -179,7 +179,7 @@
 (defn ^:private read-extension-file [extension]
   (when-let [extensions-file (find-extension-file (str extension ".mach.edn")
                                                   (clojure.string/split (path.resolve ".") path.sep))]
-    (preprocess (reader/read-string (fs.readFileSync extensions-file "utf-8")))))
+    (reader/read-string (fs.readFileSync extensions-file "utf-8"))))
 
 (defn ^:private fetch-extension-file [extension]
   (ensure-mach-extensions-dir-exists)
@@ -199,11 +199,11 @@
     (reader/read-string (fs.readFileSync extensions-file "utf-8"))))
 
 (defn ^:private add-extension [extensions extension]
-  (assoc extensions extension (cond (and (string? extension) (re-find #"^https?://.*" extension))
-                                    (fetch-extension-file extension)
+  (assoc extensions extension (preprocess (cond (and (string? extension) (re-find #"^https?://.*" extension))
+                                                (fetch-extension-file extension)
 
-                                    :default
-                                    (read-extension-file extension))))
+                                                :default
+                                                (read-extension-file extension)))))
 
 (defn- load-extension [extension]
   (let [extensions (or (get @extensions-cache extension)

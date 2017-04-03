@@ -31,6 +31,8 @@ Install Mach with NPM like this
 $ sudo npm install -g @juxt/mach lumo-cljs
 ....
 
+Mach depends on https://github.com/anmonteiro/lumo[Lumo] 1.3.0.
+
 == Getting started
 
 Create a simple project and add a Machfile.edn file. The Machfile is a
@@ -280,9 +282,8 @@ fetch Maven dependencies and to inject these dependencies directly
 onto the Lumo/Mach classpath. Note, Boot is only invoked when the
 declared dependencies vector has changed.
 
-For this to work therefore you must have Boot installed, and
-unfortunately for now, a soon-to-be released version of
-Lumo, built for Linux and available link:lumo[here].
+For this to work therefore you must have Boot installed, and at least
+https://github.com/anmonteiro/lumo[Lumo] 1.3.0.
 
 Note that Mach auto-requires namespaces, so in this example we do not
 need `(require 'aero.core)`.

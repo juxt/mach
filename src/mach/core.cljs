@@ -418,7 +418,7 @@
                     (let [ns (symbol (namespace (first x)))]
                       (when-not (find-ns ns)
                         (cljs/eval repl/st `(require '~ns) identity))
-                      nil)
+                      x)
 
                     :else x))
             machfile))
@@ -433,8 +433,8 @@
 
 (defn preprocess [machfile]
   (-> machfile
-      preprocess-requires
-      preprocess-directives))
+      preprocess-directives
+      preprocess-requires))
 
 (defn mach [input]
   (let [[opts args] (split-opts-and-args {} (drop 5 (.-argv nodejs/process)))
@@ -457,3 +457,6 @@
 
 ;; Main
 (mach [])
+
+;; TODO the directives should return an updated machfile rather than this funky replacement thing - give them more power.
+;; TODO props will need the requires thing to be done

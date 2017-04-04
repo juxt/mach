@@ -262,23 +262,6 @@
                 ;; Just a expression, no scope
                 {}))]
 
-    ;; We do a post walk to ensure tha the classpath has everything it needs, prior to eval'ing
-    (postwalk (fn [x]
-                (cond (and (list? x) (= 'require (first x)))
-                      (do
-                        (lumo.repl/execute "text" (str x) true false nil)
-                        nil)
-
-                      ;; Auto require
-                      (and (list? x) (symbol? (first x)) (namespace (first x)))
-                      (let [ns (symbol (namespace (first x)))]
-                        (when-not (find-ns ns)
-                          (cljs/eval repl/st `(require '~ns) identity))
-                        nil)
-
-                      :else x))
-              code)
-
     ;; Eval the code
     (when-let [val (:value (cljs/eval repl/st code identity))]
       ;; Print regardless
@@ -421,13 +404,37 @@
 (defmethod apply-mach-directive :default [machfile verb target]
   (throw (ex-info (str "Unknown preprocess target: '" verb "'") {})))
 
-(defn preprocess [machfile]
+(defn- preprocess-requires
+  "Ensure that the classpath has everything it needs, prior to targets being evaled"
+  [machfile]
+  (postwalk (fn [x]
+              (cond (and (list? x) (= 'require (first x)))
+                    (do
+                      (lumo.repl/execute "text" (str x) true false nil)
+                      nil)
+
+                    ;; Auto require
+                    (and (list? x) (symbol? (first x)) (namespace (first x)))
+                    (let [ns (symbol (namespace (first x)))]
+                      (when-not (find-ns ns)
+                        (cljs/eval repl/st `(require '~ns) identity))
+                      nil)
+
+                    :else x))
+            machfile))
+
+(defn preprocess-directives [machfile]
   (let [ordered-directives {'mach/m2 0 'mach/import 1 'mach/init 2}]
     (reduce into {}
             (for [[k v] (sort-by (comp ordered-directives key) machfile)]
               (if (ordered-directives k)
                 (apply-mach-directive machfile k v)
                 [[k v]])))))
+
+(defn preprocess [machfile]
+  (-> machfile
+      preprocess-requires
+      preprocess-directives))
 
 (defn mach [input]
   (let [[opts args] (split-opts-and-args {} (drop 5 (.-argv nodejs/process)))

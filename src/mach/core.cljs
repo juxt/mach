@@ -383,15 +383,15 @@
                            rest-args)
       [opts args])))
 
-(defmulti apply-mach-preprocess
+(defmulti apply-mach-directive
   "Preprocess Machfile with available configurations"
   (fn [machfile verb target] verb))
 
-(defmethod apply-mach-preprocess :init [machfile verb target]
+(defmethod apply-mach-directive 'mach/init [machfile verb target]
   (cljs/eval repl/st target identity)
   nil)
 
-(defmethod apply-mach-preprocess :import [machfile verb extensions]
+(defmethod apply-mach-directive 'mach/import [machfile verb extensions]
   (for [[extension props] extensions
         [ext-k ext-target] (load-extension extension)]
     [ext-k (map-props-onto-extension-target ext-target props)]))
@@ -408,7 +408,7 @@
 
     (fs.writeFileSync cp-hash-file (hash deps))))
 
-(defmethod apply-mach-preprocess :m2 [machfile _ deps]
+(defmethod apply-mach-directive 'mach/m2 [machfile _ deps]
   (ensure-mach-dir-exists)
   (let [cp-file ".mach/cp"
         cp-hash-file ".mach/cp-hash"]
@@ -418,15 +418,16 @@
     (js/$$LUMO_GLOBALS.addSourcePaths (clojure.string/split (str (fs.readFileSync cp-file)) ":")))
   nil)
 
-(defmethod apply-mach-preprocess :default [machfile verb target]
+(defmethod apply-mach-directive :default [machfile verb target]
   (throw (ex-info (str "Unknown preprocess target: '" verb "'") {})))
 
 (defn preprocess [machfile]
-  (reduce into {}
-        (for [[k v] machfile]
-          (if-let [verb (keyword (last (re-find #"^mach/(\w+)" (str k))))]
-            (apply-mach-preprocess machfile verb v)
-            [[k v]]))))
+  (let [ordered-directives {'mach/m2 0 'mach/import 1 'mach/init 2}]
+    (reduce into {}
+            (for [[k v] (sort-by (comp ordered-directives key) machfile)]
+              (if (ordered-directives k)
+                (apply-mach-directive machfile k v)
+                [[k v]])))))
 
 (defn mach [input]
   (let [[opts args] (split-opts-and-args {} (drop 5 (.-argv nodejs/process)))

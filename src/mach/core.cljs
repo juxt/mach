@@ -402,6 +402,10 @@
 (defn- preprocess-requires
   "Ensure that the classpath has everything it needs, prior to targets being evaled"
   [machfile]
+  ;; Process mach requires
+  (when-let [requires (get machfile 'mach/require)]
+    (doseq [req requires]
+      (cljs/eval repl/st `(require '~req) identity)))
   (postwalk (fn [x]
               (cond (and (list? x) (= 'require (first x)))
                     (do

@@ -1,3 +1,4 @@
 {mach/init (do (when (not (mach.core/file-exists? ".mach/roll"))
                  #$ ["git" "clone" "https://github.com/juxt/roll" ".mach/roll"])
-               #cp ".mach/roll/src")}
+               #cp ".mach/roll/src"
+               (require 'roll.core))}

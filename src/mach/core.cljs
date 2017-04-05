@@ -228,13 +228,6 @@
 
 (reader/register-tag-parser! "import" import)
 
-(defn resolve-refs [mach-config]
-  (postwalk (fn [x]
-              (if (instance? Reference x)
-                (get-in mach-config (:path x))
-                x))
-            mach-config))
-
 (defmulti apply-verb
   "Return boolean to indicate if work was done (true) or not (false)"
   (fn [machfile target-name verb] verb))
@@ -366,18 +359,16 @@
                            rest-args)
       [opts args])))
 
-(defmulti apply-mach-directive
-  "Preprocess Machfile with available configurations"
-  (fn [machfile verb target] verb))
+(defn- preprocess-init [machfile]
+  (when-let [target (get machfile 'mach/init)]
+    (cljs/eval repl/st target identity))
+  machfile)
 
-(defmethod apply-mach-directive 'mach/init [machfile verb target]
-  (cljs/eval repl/st target identity)
-  nil)
-
-(defmethod apply-mach-directive 'mach/import [machfile verb extensions]
-  (for [[extension props] extensions
-        [ext-k ext-target] (load-extension extension)]
-    [ext-k (map-props-onto-extension-target ext-target props)]))
+(defn- preprocess-import [machfile]
+  (into machfile
+        (for [[extension props] (get machfile 'mach/import)
+              [ext-k ext-target] (load-extension extension)]
+          [ext-k (map-props-onto-extension-target ext-target props)])))
 
 (defn- write-classpath [cp-file cp-hash-file deps]
   (println "Writing Mach classpath to" cp-file)
@@ -391,18 +382,16 @@
 
     (fs.writeFileSync cp-hash-file (hash deps))))
 
-(defmethod apply-mach-directive 'mach/m2 [machfile _ deps]
-  (ensure-mach-dir-exists)
-  (let [cp-file ".mach/cp"
-        cp-hash-file ".mach/cp-hash"]
-    (when-not (and (fs.existsSync cp-hash-file)
-                   (= (hash deps) (reader/read-string (fs.readFileSync cp-hash-file "utf-8"))))
-      (write-classpath cp-file cp-hash-file deps))
-    (js/$$LUMO_GLOBALS.addSourcePaths (clojure.string/split (str (fs.readFileSync cp-file)) ":")))
-  nil)
-
-(defmethod apply-mach-directive :default [machfile verb target]
-  (throw (ex-info (str "Unknown preprocess target: '" verb "'") {})))
+(defn- preprocess-m2 [machfile]
+  (when-let [deps (get machfile 'mach/m2)]
+    (ensure-mach-dir-exists)
+    (let [cp-file ".mach/cp"
+          cp-hash-file ".mach/cp-hash"]
+      (when-not (and (fs.existsSync cp-hash-file)
+                     (= (hash deps) (reader/read-string (fs.readFileSync cp-hash-file "utf-8"))))
+        (write-classpath cp-file cp-hash-file deps))
+      (js/$$LUMO_GLOBALS.addSourcePaths (clojure.string/split (str (fs.readFileSync cp-file)) ":"))))
+  machfile)
 
 (defn- preprocess-requires
   "Ensure that the classpath has everything it needs, prior to targets being evaled"
@@ -423,25 +412,37 @@
                     :else x))
             machfile))
 
-(defn preprocess-directives [machfile]
-  (let [ordered-directives {'mach/m2 0 'mach/import 1 'mach/init 2}]
-    (reduce into {}
-            (for [[k v] (sort-by (comp ordered-directives key) machfile)]
-              (if (ordered-directives k)
-                (apply-mach-directive machfile k v)
-                [[k v]])))))
+(defn- preprocess-props
+  [machfile]
+  (if-let [props (get machfile 'mach/props)]
+    (postwalk (fn [x]
+                (if-let [prop (and (symbol? x) (get props x))]
+                  prop
+                  x))
+              machfile)
+    machfile))
+
+(defn- preprocess-resolve-refs [mach-config]
+  (postwalk (fn [x]
+              (if (instance? Reference x)
+                (get-in mach-config (:path x))
+                x))
+            mach-config))
 
 (defn preprocess [machfile]
-  (-> machfile
-      preprocess-directives
-      preprocess-requires))
+  (reduce #(%2 %1) machfile [preprocess-m2
+                             preprocess-requires
+;;                             preprocess-props
+                             preprocess-import
+                             preprocess-init
+                             preprocess-resolve-refs]))
 
 (defn mach [input]
   (let [[opts args] (split-opts-and-args {} (drop 5 (.-argv nodejs/process)))
         targets (or (seq (map symbol args)) ['default])
         machfile (get opts :f "Machfile.edn")]
     (let [mach-config (reader/read-string (fs.readFileSync machfile "utf-8"))
-          mach-config (->> mach-config preprocess resolve-refs)]
+          mach-config (preprocess mach-config)]
       (try
         (binding [cljs/*eval-fn* repl/caching-node-eval]
           (when-not
@@ -457,6 +458,3 @@
 
 ;; Main
 (mach [])
-
-;; TODO the directives should return an updated machfile rather than this funky replacement thing - give them more power.
-;; TODO props will need the requires thing to be done

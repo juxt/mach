@@ -393,6 +393,10 @@
       (js/$$LUMO_GLOBALS.addSourcePaths (clojure.string/split (str (fs.readFileSync cp-file)) ":"))))
   machfile)
 
+(defn- preprocess-classpath [machfile]
+  (when-let [cp (get machfile 'mach/classpath)]
+    (js/$$LUMO_GLOBALS.addSourcePaths cp)))
+
 (defn- preprocess-requires
   "Ensure that the classpath has everything it needs, prior to targets being evaled"
   [machfile]
@@ -430,12 +434,13 @@
             mach-config))
 
 (defn preprocess [machfile]
-  (reduce #(%2 %1) machfile [preprocess-m2
-                             preprocess-requires
-;;                             preprocess-props
-                             preprocess-import
-                             preprocess-init
-                             preprocess-resolve-refs]))
+  (reduce #(or (%2 %1) %1) machfile [preprocess-m2
+                                preprocess-classpath
+                                preprocess-requires
+                                ;;                             preprocess-props
+                                preprocess-import
+                                preprocess-init
+                                preprocess-resolve-refs]))
 
 (defn mach [input]
   (let [[opts args] (split-opts-and-args {} (drop 5 (.-argv nodejs/process)))

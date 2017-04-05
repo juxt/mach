@@ -382,8 +382,10 @@
 
     (fs.writeFileSync cp-hash-file (hash deps))))
 
-(defn- preprocess-m2 [machfile]
-  (when-let [deps (get machfile 'mach/m2)]
+(defn- preprocess-dependencies [machfile]
+  (when-let [deps (or (get machfile 'mach/dependencies)
+                      ;; Deprecated
+                      (get machfile 'mach/m2))]
     (ensure-mach-dir-exists)
     (let [cp-file ".mach/cp"
           cp-hash-file ".mach/cp-hash"]
@@ -434,13 +436,13 @@
             mach-config))
 
 (defn preprocess [machfile]
-  (reduce #(or (%2 %1) %1) machfile [preprocess-m2
-                                preprocess-classpath
-                                preprocess-requires
-                                ;;                             preprocess-props
-                                preprocess-import
-                                preprocess-init
-                                preprocess-resolve-refs]))
+  (reduce #(or (%2 %1) %1) machfile [preprocess-dependencies
+                                     preprocess-classpath
+                                     preprocess-requires
+                                     ;;                             preprocess-props
+                                     preprocess-import
+                                     preprocess-init
+                                     preprocess-resolve-refs]))
 
 (defn mach [input]
   (let [[opts args] (split-opts-and-args {} (drop 5 (.-argv nodejs/process)))

@@ -117,12 +117,10 @@
                                        (mapcat mach.core/file-seq source)
                                        (mach.core/file-seq source)))))
 
-(defn resolve-symbols [expr scope]
-  (postwalk (fn [x]
-              (if (symbol? x)
-                (if-let [v (get scope x)] v x)
-                x))
-            expr))
+(defn resolve-symbols
+  "Postwalk and swap out symbols in the expression from supplied map."
+  [expr m]
+  (postwalk (fn [x] (or (and (symbol? x) (get m x)) x)) expr))
 
 (defn sh [& args]
   (let [args (flatten args)
@@ -262,9 +260,8 @@
       ;; Print regardless
       (cond
         (= verb 'print) (println val)
-        :otherwise (when (get target 'produce)
-                     (when-let [product (get target 'product)]
-                       (spit product val)))))
+        :otherwise (when-let [product (and (get target 'produce) (get target 'product))]
+                     (spit product val))))
 
     ;; We did work so return true
     true))
@@ -274,39 +271,36 @@
         (doall
          (for [target-name (reverse (order machfile target-name))
                :let [target (get machfile target-name)]]
-           (do
-             (if target
-               (let [novelty (when (get target 'novelty)
-                               (let [res (cljs/eval
-                                          repl/st
-                                          (resolve-symbols (get target 'novelty) target)
-                                          identity)]
-                                 (:value res)))]
+           (if target
+             (let [novelty (when (get target 'novelty)
+                             (let [res (cljs/eval
+                                        repl/st
+                                        (resolve-symbols (get target 'novelty) target)
+                                        identity)]
+                               (:value res)))]
 
-                 ;; Call update!
-                 (when (or (not (map? target))
-                           (and (get target 'update!) (nil? (get target 'novelty)))
-                           (true? novelty)
-                           (when (seq? novelty) (not-empty novelty)))
+               ;; Call update!
+               (when (or (not (map? target))
+                         (and (get target 'update!) (nil? (get target 'novelty)))
+                         (true? novelty)
+                         (when (seq? novelty) (not-empty novelty)))
 
-                   (update! target novelty verb)))
+                 (update! target novelty verb)))
 
-               ;; Unlikely, already checked this in resolve-target
-               (throw (ex-info (str "Target not found: " target-name) {}))))))))
+             ;; Unlikely, already checked this in resolve-target
+             (throw (ex-info (str "Target not found: " target-name) {})))))))
 
 ;; Run the update (or produce) and print, no deps
 (defmethod apply-verb 'update [machfile target-name verb]
-  (let [target (get machfile target-name)]
-    (if target
-      (update! target nil verb)
-      (throw (ex-info (str "No target: " target-name) {})))))
+  (if-let [target (get machfile target-name)]
+    (update! target nil verb)
+    (throw (ex-info (str "No target: " target-name) {}))))
 
 ;; Print the produce
 (defmethod apply-verb 'print [machfile target-name verb]
-  (let [target (get machfile target-name)]
-    (if target
-      (update! target nil verb)
-      (throw (ex-info (str "No target: " target-name) {})))))
+  (if-let [target (get machfile target-name)]
+    (update! target nil verb)
+    (throw (ex-info (str "No target: " target-name) {}))))
 
 (defmethod apply-verb 'clean [machfile target verb]
   (doseq [target (order machfile target)

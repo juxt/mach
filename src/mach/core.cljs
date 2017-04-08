@@ -266,22 +266,19 @@
          (for [target-name (reverse (order machfile target-name))
                :let [target (get machfile target-name)]]
            (if target
-             (if (map? target)
-               (let [novelty (when (get target 'novelty)
-                               (let [res (cljs/eval
-                                          repl/st
-                                          (resolve-symbols (get target 'novelty) target)
-                                          identity)]
-                                 (:value res)))]
+             (if (and (map? target) (get target 'novelty))
+               (let [novelty (let [res (cljs/eval
+                                        repl/st
+                                        (resolve-symbols (get target 'novelty) target)
+                                        identity)]
+                               (:value res))]
 
                  ;; Call update!
-                 (when (or (and (get target 'update!) (nil? (get target 'novelty)))
-                           (true? novelty)
-                           (when (seq? novelty) (not-empty novelty)))
-
+                 (when (or (true? novelty)
+                           (and (seq? novelty) (not-empty novelty)))
                    (update! (assoc target 'novelty `(quote ~novelty)) verb)))
 
-               ;; Target is an expr
+               ;; Target is an expr or there is no novelty, press on:
                (update! target verb))
 
              ;; Unlikely, already checked this in resolve-target

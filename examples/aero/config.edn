@@ -1,1 +1,1 @@
-{:aws-profile "yourprofile"}
+{:aws-profile #env AWS_PROFILE}

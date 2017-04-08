@@ -1,4 +1,3 @@
-{profile (let [{:keys [aws-profile] :as config} (aero.core/read-config "config.edn" {})]
-           (assert (= "yourprofile" aws-profile)))
-
- mach/m2 [[aero "1.1.2"]]}
+{config (aero.core/read-config "config.edn" {})
+ mach/dependencies [[aero "1.1.2"]]
+ mach/import [["https://raw.githubusercontent.com/juxt/mach/master/extensions/aws.mach.edn" {aws-profile (:aws-profile #ref [config])}]]}

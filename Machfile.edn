@@ -1,0 +1,1 @@
+{test #$ ["lumo" "-c" "src:test" "-m" "mach.lumo-test"]}

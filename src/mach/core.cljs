@@ -133,7 +133,9 @@
                                                #(str/replace % "|" "\\|")) (rest args)))
                            #js {"shell" true})]
     (println (str (.-stdout result)))
-    (println (str (.-stderr result)))))
+    (println (str (.-stderr result)))
+    (when (.-stdout result)
+      (.trim (str (.-stdout result))))))
 
 (defn ^:private read-shell [vals]
   `(sh ~@vals))

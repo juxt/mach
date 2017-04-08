@@ -240,22 +240,16 @@
              (get target 'update!))
     (throw (ex-info "Invalid to have both update! and produce in the same target" {:target target})))
 
-  (let [code (resolve-symbols
-              ;; Expression
-              (if (map? target)
-                (or (get target 'produce)
-                    (get target 'update!))
-                target)
-              ;; Scope
-              (if (map? target) target {}))]
+  (let [code (if (map? target)
+               (resolve-symbols (some target ['produce 'update!]) target)
+               target)]
 
     ;; Eval the code
     (when-let [val (:value (cljs/eval repl/st code identity))]
-      ;; Print regardless
-      (cond
-        (= verb 'print) (println val)
-        :otherwise (when-let [product (and (get target 'produce) (get target 'product))]
-                     (spit product val))))
+      (if (= verb 'print)
+        (println val)
+        (when-let [product (and (get target 'produce) (get target 'product))]
+          (spit product val))))
 
     ;; We did work so return true
     true))

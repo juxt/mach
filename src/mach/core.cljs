@@ -235,7 +235,7 @@
 (defmethod apply-verb :default [machfile target-name verb]
   (throw (ex-info (str "Unknown verb: '" verb "'") {})))
 
-(defn update! [target novelty verb]
+(defn update! [target verb]
   (when (and (get target 'produce)
              (get target 'update!))
     (throw (ex-info "Invalid to have both update! and produce in the same target" {:target target})))
@@ -247,13 +247,7 @@
                     (get target 'update!))
                 target)
               ;; Scope
-              (if (map? target)
-                (merge
-                 target
-                 ;; Already computed novelty
-                 {'novelty `(quote ~novelty)})
-                ;; Just a expression, no scope
-                {}))]
+              (if (map? target) target {}))]
 
     ;; Eval the code
     (when-let [val (:value (cljs/eval repl/st code identity))]
@@ -272,20 +266,23 @@
          (for [target-name (reverse (order machfile target-name))
                :let [target (get machfile target-name)]]
            (if target
-             (let [novelty (when (get target 'novelty)
-                             (let [res (cljs/eval
-                                        repl/st
-                                        (resolve-symbols (get target 'novelty) target)
-                                        identity)]
-                               (:value res)))]
+             (if (map? target)
+               (let [novelty (when (get target 'novelty)
+                               (let [res (cljs/eval
+                                          repl/st
+                                          (resolve-symbols (get target 'novelty) target)
+                                          identity)]
+                                 (:value res)))]
 
-               ;; Call update!
-               (when (or (not (map? target))
-                         (and (get target 'update!) (nil? (get target 'novelty)))
-                         (true? novelty)
-                         (when (seq? novelty) (not-empty novelty)))
+                 ;; Call update!
+                 (when (or (and (get target 'update!) (nil? (get target 'novelty)))
+                           (true? novelty)
+                           (when (seq? novelty) (not-empty novelty)))
 
-                 (update! target novelty verb)))
+                   (update! (assoc target 'novelty `(quote ~novelty)) verb)))
+
+               ;; Target is an expr
+               (update! target verb))
 
              ;; Unlikely, already checked this in resolve-target
              (throw (ex-info (str "Target not found: " target-name) {})))))))
@@ -293,13 +290,13 @@
 ;; Run the update (or produce) and print, no deps
 (defmethod apply-verb 'update [machfile target-name verb]
   (if-let [target (get machfile target-name)]
-    (update! target nil verb)
+    (update! target verb)
     (throw (ex-info (str "No target: " target-name) {}))))
 
 ;; Print the produce
 (defmethod apply-verb 'print [machfile target-name verb]
   (if-let [target (get machfile target-name)]
-    (update! target nil verb)
+    (update! target verb)
     (throw (ex-info (str "No target: " target-name) {}))))
 
 (defmethod apply-verb 'clean [machfile target verb]

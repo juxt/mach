@@ -66,7 +66,7 @@ Clone the mach project.
 
 ....
 $ git clone https://github.com/juxt/mach
-$ cd mach/test
+$ cd mach/examples/app
 ....
 
 Try the following:

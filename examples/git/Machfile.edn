@@ -1,0 +1,4 @@
+{info (println "version is" version "artefact is" artefact)
+
+ mach/props [version #$ ["git" "describe" "--dirty" "--long" "--tags" "--match" "[0-9]*"]
+             artefact (str "foo-" #ref [version] "-standalone.jar")]}

@@ -235,21 +235,30 @@
 (defmethod apply-verb :default [machfile target-name verb]
   (throw (ex-info (str "Unknown verb: '" verb "'") {})))
 
-(defn update! [target verb]
+(defn- with-prop-bindings [code machfile]
+  (if-let [props (not-empty (get machfile 'mach/props))]
+    `(let ~props
+       ~code)
+    code))
+
+(defn update! [machfile target verb]
   (when (and (get target 'produce)
              (get target 'update!))
     (throw (ex-info "Invalid to have both update! and produce in the same target" {:target target})))
 
-  (let [code (if (map? target)
-               (resolve-symbols (some target ['produce 'update!]) target)
-               target)]
+  (let [code (-> (if (map? target)
+                   (resolve-symbols (some target ['produce 'update!]) target)
+                   target)
+                 (with-prop-bindings machfile))]
 
     ;; Eval the code
-    (when-let [val (:value (cljs/eval repl/st code identity))]
+    (let [{:keys [value error]} (cljs/eval repl/st code identity)]
+      (when error
+        (throw (js/Error. (str "Could not eval form " code ", got error: " error))))
       (if (= verb 'print)
-        (println val)
+        (println value)
         (when-let [product (and (get target 'produce) (get target 'product))]
-          (spit product val))))
+          (spit product value))))
 
     ;; We did work so return true
     true))
@@ -270,10 +279,10 @@
                  ;; Call update!
                  (when (or (true? novelty)
                            (and (seq? novelty) (not-empty novelty)))
-                   (update! (assoc target 'novelty `(quote ~novelty)) verb)))
+                   (update! machfile (assoc target 'novelty `(quote ~novelty)) verb)))
 
                ;; Target is an expr or there is no novelty, press on:
-               (update! target verb))
+               (update! machfile target verb))
 
              ;; Unlikely, already checked this in resolve-target
              (throw (ex-info (str "Target not found: " target-name) {})))))))
@@ -281,13 +290,13 @@
 ;; Run the update (or produce) and print, no deps
 (defmethod apply-verb 'update [machfile target-name verb]
   (if-let [target (get machfile target-name)]
-    (update! target verb)
+    (update! machfile target verb)
     (throw (ex-info (str "No target: " target-name) {}))))
 
 ;; Print the produce
 (defmethod apply-verb 'print [machfile target-name verb]
   (if-let [target (get machfile target-name)]
-    (update! target verb)
+    (update! machfile target verb)
     (throw (ex-info (str "No target: " target-name) {}))))
 
 (defmethod apply-verb 'clean [machfile target verb]
@@ -406,16 +415,6 @@
                     :else x))
             machfile))
 
-(defn- preprocess-props
-  [machfile]
-  (if-let [props (get machfile 'mach/props)]
-    (postwalk (fn [x]
-                (if-let [prop (and (symbol? x) (get props x))]
-                  prop
-                  x))
-              machfile)
-    machfile))
-
 (defn- preprocess-resolve-refs [mach-config]
   (postwalk (fn [x]
               (if (instance? Reference x)
@@ -427,7 +426,6 @@
   (reduce #(or (%2 %1) %1) machfile [preprocess-dependencies
                                      preprocess-classpath
                                      preprocess-requires
-                                     ;;                             preprocess-props
                                      preprocess-import
                                      preprocess-init
                                      preprocess-resolve-refs]))

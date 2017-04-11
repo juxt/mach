@@ -42,10 +42,6 @@
 (def fs (nodejs/require "fs"))
 (def child_process (nodejs/require "child_process"))
 
-(defn spit [f data]
-  (println "Writing" f)
-  (fs.writeFileSync f data))
-
 (defn file-exists? [f]
   (fs.existsSync f))
 
@@ -226,7 +222,13 @@
        ~code)
     code))
 
-(defn update! [machfile target verb]
+(defn- spit-product [target v]
+  (when-let [product (and (get target 'produce) (get target 'product))]
+    (println "Writing" product)
+    (fs.writeFileSync product v)))
+
+(defn update! [machfile target verb & {:keys [post-op]
+                                       :or {post-op spit-product}}]
   (let [code (-> (if (map? target)
                    (resolve-symbols (some target ['produce 'update!]) target)
                    target)
@@ -236,10 +238,8 @@
     (let [{:keys [value error]} (cljs/eval repl/st code identity)]
       (when error
         (throw (js/Error. (str "Could not eval form " code ", got error: " error))))
-      (if (= verb 'print)
-        (println value)
-        (when-let [product (and (get target 'produce) (get target 'product))]
-          (spit product value))))
+
+      (post-op target value))
 
     ;; We did work so return true
     true))
@@ -270,7 +270,7 @@
 
 ;; Print the produce
 (defmethod apply-verb 'print [machfile target-name verb]
-  (update! machfile (get machfile target-name) verb))
+  (update! machfile (get machfile target-name) verb :post-op (fn [_ v] (println v))))
 
 (defmethod apply-verb 'clean [machfile target-name verb]
   (doseq [target (order machfile target-name)

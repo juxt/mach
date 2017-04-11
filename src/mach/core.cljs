@@ -98,11 +98,6 @@
                                        (mapcat mach.core/file-seq source)
                                        (mach.core/file-seq source)))))
 
-(defn resolve-symbols
-  "Postwalk and swap out symbols in the expression from supplied map."
-  [expr m]
-  (postwalk (fn [x] (or (and (symbol? x) (get m x)) x)) expr))
-
 (defn sh [& args]
   (let [args (flatten args)
         _  (apply println "$" args)
@@ -221,6 +216,11 @@
     `(let ~props
        ~code)
     code))
+
+(defn- resolve-symbols
+  "Postwalk and swap out symbols in the expression from supplied map."
+  [expr target]
+  (postwalk (fn [x] (or (and (symbol? x) (get target x)) x)) expr))
 
 (defn- spit-product [target v]
   (when-let [product (and (get target 'produce) (get target 'product))]

@@ -222,25 +222,30 @@
   [expr target]
   (postwalk (fn [x] (or (and (symbol? x) (get target x)) x)) expr))
 
-(defn- spit-product [target v]
+(defn- eval-rule
+  "Evals Mach rule and returns the result if successful, throws an
+  error if not."
+  [code target machfile]
+  (let [code (-> code
+                 (resolve-symbols target)
+                 (with-prop-bindings machfile))]
+    ;; Eval the code
+    (let [{:keys [value error]} (cljs/eval repl/st code identity)]
+      (when error
+        (throw (js/Error. (str "Could not eval form " code ", got error: " error))))
+      value)))
+
+(defn- spit-product [v target]
   (when-let [product (and (get target 'produce) (get target 'product))]
     (println "Writing" product)
     (fs.writeFileSync product v)))
 
 (defn update! [machfile target verb & {:keys [post-op]
                                        :or {post-op spit-product}}]
-  (let [code (-> (if (map? target)
-                   (resolve-symbols (some target ['produce 'update!]) target)
-                   target)
-                 (with-prop-bindings machfile))]
-
-    ;; Eval the code
-    (let [{:keys [value error]} (cljs/eval repl/st code identity)]
-      (when error
-        (throw (js/Error. (str "Could not eval form " code ", got error: " error))))
-
-      (post-op target value))
-
+  (let [code (if (map? target) (some target ['produce 'update!]) target)]
+    (-> code
+        (eval-rule target machfile)
+        (post-op target))
     ;; We did work so return true
     true))
 
@@ -249,13 +254,8 @@
         (doall
          (for [target-name (reverse (order machfile target-name))
                :let [target (get machfile target-name)]]
-           (if (and (map? target) (get target 'novelty))
-             (let [novelty (let [res (cljs/eval
-                                      repl/st
-                                      (resolve-symbols (get target 'novelty) target)
-                                      identity)]
-                             (:value res))]
-
+           (if-let [novelty-form (and (map? target) (get target 'novelty))]
+             (let [novelty (eval-rule novelty-form target machfile)]
                ;; Call update!
                (when (or (true? novelty)
                          (and (seq? novelty) (not-empty novelty)))
@@ -270,14 +270,14 @@
 
 ;; Print the produce
 (defmethod apply-verb 'print [machfile target-name verb]
-  (update! machfile (get machfile target-name) verb :post-op (fn [_ v] (println v))))
+  (update! machfile (get machfile target-name) verb :post-op (fn [v _] (println v))))
 
 (defmethod apply-verb 'clean [machfile target-name verb]
   (doseq [target (order machfile target-name)
           :let [target (get machfile target-name)]]
     (if-let [rule (get target 'clean!)]
       ;; If so, call it
-      (cljs/eval repl/st (resolve-symbols rule target) identity)
+      (eval-rule rule target machfile)
       ;; Otherwise implied policy is to delete declared target files
       (when-let [product (get target 'product)]
         (if (coll? product)
@@ -301,11 +301,7 @@
    (let [target (get machfile target-name)
          novelty (get target 'novelty)]
      (when novelty
-       (let [res (cljs/eval
-                  repl/st
-                  (resolve-symbols novelty target)
-                  identity)]
-         (:value res))))))
+       (eval-rule novelty target machfile)))))
 
 (defn resolve-target
   "Resolve target key (symbol) matching given target (string) in machfile.

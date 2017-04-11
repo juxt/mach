@@ -18,32 +18,17 @@
 (def toposort (nodejs/require "toposort"))
 (def path (nodejs/require "path"))
 
-(defn resolve-target
-  "Resolve target key (symbol) matching given target (string) in machfile."
-  [machfile target]
-  (if (contains? machfile (symbol target))
-    (symbol target)
-    ;; Else try to search for
-    (if-let [target
-             (some (fn [x]
-                     (let [[k v] x]
-                       (when (= target (get v 'product))
-                         k)))
-                   machfile)]
-      (symbol target)
-      (throw (ex-info (str "Could not resolve target: " target) {})))))
-
-(defn order [machfile target]
+(defn order [machfile target-name]
   (map symbol
        (drop 1 ; drop nil
              (js->clj
               (toposort
                (clj->js
                 (tree-seq
-                 (fn [[_ target]] (-> machfile (get target) (get 'depends)))
-                 (fn [[_ target]]
-                   (map vector (repeat target) (-> machfile (get target) (get 'depends))))
-                 [nil target])))))))
+                 (fn [[_ target-name]] (-> machfile (get target-name) (get 'depends)))
+                 (fn [[_ target-name]]
+                   (map vector (repeat target-name) (-> machfile (get target-name) (get 'depends))))
+                 [nil target-name])))))))
 
 ;; References
 
@@ -242,10 +227,6 @@
     code))
 
 (defn update! [machfile target verb]
-  (when (and (get target 'produce)
-             (get target 'update!))
-    (throw (ex-info "Invalid to have both update! and produce in the same target" {:target target})))
-
   (let [code (-> (if (map? target)
                    (resolve-symbols (some target ['produce 'update!]) target)
                    target)
@@ -268,45 +249,37 @@
         (doall
          (for [target-name (reverse (order machfile target-name))
                :let [target (get machfile target-name)]]
-           (if target
-             (if (and (map? target) (get target 'novelty))
-               (let [novelty (let [res (cljs/eval
-                                        repl/st
-                                        (resolve-symbols (get target 'novelty) target)
-                                        identity)]
-                               (:value res))]
+           (if (and (map? target) (get target 'novelty))
+             (let [novelty (let [res (cljs/eval
+                                      repl/st
+                                      (resolve-symbols (get target 'novelty) target)
+                                      identity)]
+                             (:value res))]
 
-                 ;; Call update!
-                 (when (or (true? novelty)
-                           (and (seq? novelty) (not-empty novelty)))
-                   (update! machfile (assoc target 'novelty `(quote ~novelty)) verb)))
+               ;; Call update!
+               (when (or (true? novelty)
+                         (and (seq? novelty) (not-empty novelty)))
+                 (update! machfile (assoc target 'novelty `(quote ~novelty)) verb)))
 
-               ;; Target is an expr or there is no novelty, press on:
-               (update! machfile target verb))
-
-             ;; Unlikely, already checked this in resolve-target
-             (throw (ex-info (str "Target not found: " target-name) {})))))))
+             ;; Target is an expr or there is no novelty, press on:
+             (update! machfile target verb))))))
 
 ;; Run the update (or produce) and print, no deps
 (defmethod apply-verb 'update [machfile target-name verb]
-  (if-let [target (get machfile target-name)]
-    (update! machfile target verb)
-    (throw (ex-info (str "No target: " target-name) {}))))
+  (update! machfile (get machfile target-name) verb))
 
 ;; Print the produce
 (defmethod apply-verb 'print [machfile target-name verb]
-  (if-let [target (get machfile target-name)]
-    (update! machfile target verb)
-    (throw (ex-info (str "No target: " target-name) {}))))
+  (update! machfile (get machfile target-name) verb))
 
-(defmethod apply-verb 'clean [machfile target verb]
-  (doseq [target (order machfile target)
-          :let [v (get machfile target)]]
-    (if-let [rule (get v 'clean!)]
+(defmethod apply-verb 'clean [machfile target-name verb]
+  (doseq [target (order machfile target-name)
+          :let [target (get machfile target-name)]]
+    (if-let [rule (get target 'clean!)]
       ;; If so, call it
-      (cljs/eval repl/st (resolve-symbols rule v) identity)
+      (cljs/eval repl/st (resolve-symbols rule target) identity)
       ;; Otherwise implied policy is to delete declared target files
-      (when-let [product (get v 'product)]
+      (when-let [product (get target 'product)]
         (if (coll? product)
           (if (some dir? product)
             (apply sh "rm" "-rf" product)
@@ -325,13 +298,39 @@
 
 (defmethod apply-verb 'novelty [machfile target-name verb]
   (pprint/pprint
-   (when-let [target (get machfile target-name)]
-     (when (get target 'novelty)
+   (let [target (get machfile target-name)
+         novelty (get target 'novelty)]
+     (when novelty
        (let [res (cljs/eval
                   repl/st
-                  (resolve-symbols (get target 'novelty) target)
+                  (resolve-symbols novelty target)
                   identity)]
          (:value res))))))
+
+(defn resolve-target
+  "Resolve target key (symbol) matching given target (string) in machfile.
+   Once a target has been resolved, it is also validated."
+  [machfile target-name]
+  (if-let [target (or (and (contains? machfile (symbol target-name)) (symbol target-name))
+                      ;; Else try to search for product
+                      (some (fn [[k v]]
+                              (when (= target-name (get v 'product))
+                                k))
+                            machfile))]
+
+    (do
+      ;; validate target contract:
+      (when (and (get target 'produce)
+                 (get target 'update!))
+        (throw (ex-info "Invalid to have both update! and produce in the same target" {:target target})))
+
+      ;; Validate dependency tree:
+      (doseq [target-name (reverse (order machfile target-name))]
+        (when-not (get machfile target-name)
+          (throw (ex-info (str "Target dependency not found: " target-name) {}))))
+      target)
+
+    (throw (ex-info (str "Could not resolve target: " target-name) {}))))
 
 (defn build-target
   "Build a target, return true if work was done"

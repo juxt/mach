@@ -307,38 +307,34 @@
   "Resolve target key (symbol) matching given target (string) in machfile.
    Once a target has been resolved, it is also validated."
   [machfile target-name]
-  (if-let [target (or (and (contains? machfile (symbol target-name)) (symbol target-name))
-                      ;; Else try to search for product
-                      (some (fn [[k v]]
-                              (when (= target-name (get v 'product))
-                                k))
-                            machfile))]
-
-    (do
+  (if-let [target-symbol (or (and (contains? machfile (symbol target-name)) (symbol target-name))
+                             ;; Else try to search for product
+                             (some (fn [[k v]]
+                                     (when (= target-name (get v 'product))
+                                       k))
+                                   machfile))]
+    (let [target (get machfile target-symbol)]
       ;; validate target contract:
       (when (and (get target 'produce)
                  (get target 'update!))
         (throw (ex-info "Invalid to have both update! and produce in the same target" {:target target})))
-
       ;; Validate dependency tree:
-      (doseq [target-name (reverse (order machfile target-name))]
-        (when-not (get machfile target-name)
-          (throw (ex-info (str "Target dependency not found: " target-name) {}))))
-      target)
-
+      (doseq [dep-target (rest (order machfile target-symbol))]
+        (when-not (get machfile dep-target)
+          (throw (ex-info (str "Target dependency not found: " dep-target) {}))))
+      target-symbol)
     (throw (ex-info (str "Could not resolve target: " target-name) {}))))
 
 (defn build-target
   "Build a target, return true if work was done"
   [machfile target+verbs]
 
-  (let [[target & verbs] (str/split target+verbs ":")
-        target (resolve-target machfile target)]
-
+  (let [[target-name & verbs] (str/split target+verbs ":")
+        target-symbol (resolve-target machfile target-name)]
     (if verbs
       (some identity (doall (for [verb verbs]
-                              (apply-verb machfile target (symbol verb)))))
-      (apply-verb machfile target nil))))
+                              (apply-verb machfile target-symbol (symbol verb)))))
+      (apply-verb machfile target-symbol nil))))
 
 (defn- split-opts-and-args [opts args]
   (let [[k v & rest-args] args]

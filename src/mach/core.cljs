@@ -18,7 +18,7 @@
 (def toposort (nodejs/require "toposort"))
 (def path (nodejs/require "path"))
 
-(defn order [machfile target-name]
+(defn target-order [machfile target-name]
   (map symbol
        (drop 1 ; drop nil
              (js->clj
@@ -206,9 +206,9 @@
 
 (defmulti apply-verb
   "Return boolean to indicate if work was done (true) or not (false)"
-  (fn [machfile target-name verb] verb))
+  (fn [machfile [target-name target] verb] verb))
 
-(defmethod apply-verb :default [machfile target-name verb]
+(defmethod apply-verb :default [_ _ verb]
   (throw (ex-info (str "Unknown verb: '" verb "'") {})))
 
 (defn- with-prop-bindings [code machfile]
@@ -240,8 +240,8 @@
     (println "Writing" product)
     (fs.writeFileSync product v)))
 
-(defn update! [machfile target verb & {:keys [post-op]
-                                       :or {post-op spit-product}}]
+(defn update! [machfile target & {:keys [post-op]
+                                  :or {post-op spit-product}}]
   (let [code (if (map? target) (some target ['produce 'update!]) target)]
     (-> code
         (eval-rule target machfile)
@@ -249,59 +249,51 @@
     ;; We did work so return true
     true))
 
-(defmethod apply-verb nil [machfile target-name verb]
-  (some identity
-        (doall
-         (for [target-name (reverse (order machfile target-name))
-               :let [target (get machfile target-name)]]
-           (if-let [novelty-form (and (map? target) (get target 'novelty))]
-             (let [novelty (eval-rule novelty-form target machfile)]
-               ;; Call update!
-               (when (or (true? novelty)
-                         (and (seq? novelty) (not-empty novelty)))
-                 (update! machfile (assoc target 'novelty `(quote ~novelty)) verb)))
+(defmethod apply-verb nil [machfile [target-name target] verb]
+  (if-let [novelty-form (and (map? target) (get target 'novelty))]
+    (let [novelty (eval-rule novelty-form target machfile)]
+      ;; Call update!
+      (when (or (true? novelty)
+                (and (seq? novelty) (not-empty novelty)))
+        (update! machfile (assoc target 'novelty `(quote ~novelty)))))
 
-             ;; Target is an expr or there is no novelty, press on:
-             (update! machfile target verb))))))
+    ;; Target is an expr or there is no novelty, press on:
+    (update! machfile target)))
 
 ;; Run the update (or produce) and print, no deps
-(defmethod apply-verb 'update [machfile target-name verb]
-  (update! machfile (get machfile target-name) verb))
+(defmethod apply-verb 'update [machfile [target-name target] verg]
+  (update! machfile target))
 
 ;; Print the produce
-(defmethod apply-verb 'print [machfile target-name verb]
-  (update! machfile (get machfile target-name) verb :post-op (fn [v _] (println v))))
+(defmethod apply-verb 'print [machfile [target-name target] verb]
+  (update! machfile target :post-op (fn [v _] (println v))))
 
-(defmethod apply-verb 'clean [machfile target-name verb]
-  (doseq [target (order machfile target-name)
-          :let [target (get machfile target-name)]]
-    (if-let [rule (get target 'clean!)]
-      ;; If so, call it
-      (eval-rule rule target machfile)
-      ;; Otherwise implied policy is to delete declared target files
-      (when-let [product (get target 'product)]
-        (if (coll? product)
-          (if (some dir? product)
-            (apply sh "rm" "-rf" product)
-            (apply sh "rm" "-f" product))
-          (cond
-            (dir? product) (sh "rm" "-rf" product)
-            (file-exists? product) (sh "rm" "-f" product)
-            ;; er? this is overridden later
-            :otherwise false)))))
+(defmethod apply-verb 'clean [machfile [target-name target] verb]
+  (if-let [rule (get target 'clean!)]
+    ;; If so, call it
+    (eval-rule rule target machfile)
+    ;; Otherwise implied policy is to delete declared target files
+    (when-let [product (get target 'product)]
+      (if (coll? product)
+        (if (some dir? product)
+          (apply sh "rm" "-rf" product)
+          (apply sh "rm" "-f" product))
+        (cond
+          (dir? product) (sh "rm" "-rf" product)
+          (file-exists? product) (sh "rm" "-f" product)
+          ;; er? this is overridden later
+          :otherwise false))))
   true)
 
-(defmethod apply-verb 'depends [machfile target-name verb]
+(defmethod apply-verb 'depends [machfile [target-name target] verb]
   (pprint/pprint
-   (order machfile target-name))
+   (target-order machfile target-name))
   true)
 
-(defmethod apply-verb 'novelty [machfile target-name verb]
+(defmethod apply-verb 'novelty [machfile [target-name target] verb]
   (pprint/pprint
-   (let [target (get machfile target-name)
-         novelty (get target 'novelty)]
-     (when novelty
-       (eval-rule novelty target machfile)))))
+   (when-let [novelty (get target 'novelty)]
+     (eval-rule novelty target machfile))))
 
 (defn resolve-target
   "Resolve target key (symbol) matching given target (string) in machfile.
@@ -319,22 +311,33 @@
                  (get target 'update!))
         (throw (ex-info "Invalid to have both update! and produce in the same target" {:target target})))
       ;; Validate dependency tree:
-      (doseq [dep-target (rest (order machfile target-symbol))]
+      (doseq [dep-target (rest (target-order machfile target-symbol))]
         (when-not (get machfile dep-target)
           (throw (ex-info (str "Target dependency not found: " dep-target) {}))))
       target-symbol)
     (throw (ex-info (str "Could not resolve target: " target-name) {}))))
 
-(defn build-target
-  "Build a target, return true if work was done"
-  [machfile target+verbs]
+(defn execute-plan [machfile build-plan]
+  (into {} (for [[target-symbol verb] build-plan]
+             [[target-symbol verb]
+              (apply-verb machfile [target-symbol (get machfile target-symbol)] verb)])))
 
+(defn build-plan [machfile [target-symbol verb]]
+  (for [dependency-target (case verb
+                            nil
+                            (reverse (target-order machfile target-symbol))
+
+                            'clean
+                            (target-order machfile target-symbol)
+
+                            [target-symbol])]
+    [dependency-target verb]))
+
+(defn- expand-out-target-and-verbs [machfile target+verbs]
   (let [[target-name & verbs] (str/split target+verbs ":")
         target-symbol (resolve-target machfile target-name)]
-    (if verbs
-      (some identity (doall (for [verb verbs]
-                              (apply-verb machfile target-symbol (symbol verb)))))
-      (apply-verb machfile target-symbol nil))))
+    (for [verb (if verbs (map symbol verbs) [nil])]
+      [target-symbol verb])))
 
 (defn- split-opts-and-args [opts args]
   (let [[k v & rest-args] args]
@@ -423,22 +426,30 @@
 
 (defn mach [input]
   (let [[opts args] (split-opts-and-args {} (drop 5 (.-argv nodejs/process)))
-        targets (or (seq (map symbol args)) ['default])
-        machfile (get opts :f "Machfile.edn")]
-    (let [mach-config (reader/read-string (fs.readFileSync machfile "utf-8"))
-          mach-config (preprocess mach-config)]
-      (try
-        (binding [cljs/*eval-fn* repl/caching-node-eval]
-          (when-not
-              (some identity
-                    (doall (for [target targets]
-                             (build-target mach-config target))))
-            (println "Nothing to do!")))
+        machfile (-> opts
+                     (get :f "Machfile.edn")
+                     (fs.readFileSync "utf-8")
+                     reader/read-string
+                     preprocess)]
+    (try
+      (binding [cljs/*eval-fn* repl/caching-node-eval]
+        (when-not (->> (or (seq (map symbol args)) ['default])
+                       (mapcat (partial expand-out-target-and-verbs machfile))
+                       (reduce (fn [m target-verb]
+                                 (if (contains? m target-verb)
+                                   (println (str "mach: '" (if-let [verb (second target-verb)]
+                                                             (str (first target-verb) ":" verb) (first target-verb))
+                                                 "' is up to date."))
+                                   (let [build-plan (build-plan machfile target-verb)]
+                                     (merge m (execute-plan machfile build-plan))))) {})
+                       (vals)
+                       (some identity))
+          (println "Nothing to do!")))
 
-        (catch :default e
-          (if-let [message (.-message e)]
-            (println message)
-            (println "Error:" e)))))))
+      (catch :default e
+        (if-let [message (.-message e)]
+          (println message)
+          (println "Error:" e))))))
 
 ;; Main
 (mach [])

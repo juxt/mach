@@ -386,6 +386,15 @@
   (when-let [cp (get machfile 'mach/classpath)]
     (js/$$LUMO_GLOBALS.addSourcePaths cp)))
 
+(defn- preprocess-props [machfile]
+  (if-let [props (get machfile 'mach/props)]
+    (let [syms (map first (partition 2 props))
+          vals (:value (cljs/eval repl/st `(let ~props
+                                             [~@syms])
+                                  identity))]
+      (assoc machfile 'mach/props (vec (mapcat vector syms vals))))
+    machfile))
+
 (defn- preprocess-requires
   "Ensure that the classpath has everything it needs, prior to targets being evaled"
   [machfile]
@@ -420,6 +429,7 @@
   (reduce #(or (%2 %1) %1) machfile [preprocess-dependencies
                                      preprocess-classpath
                                      preprocess-requires
+                                     preprocess-props
                                      preprocess-import
                                      preprocess-init
                                      preprocess-resolve-refs]))

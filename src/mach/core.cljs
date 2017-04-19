@@ -107,8 +107,6 @@
                                                #(str/replace % "|" "\\|")) (rest args)))
                            #js {"shell" true
                                 "stdio" "inherit"})]
-    (println (str (.-stdout result)))
-    (println (str (.-stderr result)))
     (when (.-stdout result)
       (.trim (str (.-stdout result))))))
 

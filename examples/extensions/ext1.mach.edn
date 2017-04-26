@@ -1,0 +1,3 @@
+{bar {depends [tar]
+      update! (println "bar" name)
+      clean! (println "clean" name)}}

@@ -1,0 +1,8 @@
+{foo {depends [tar]
+      update! (println "update")
+      clean! (println "clean update")}
+
+ tar {update! (println "tar")
+      clean! (println "clean tar")}
+
+ bar #import [ext1/bar {name "name-1"}]}

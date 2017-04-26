@@ -134,7 +134,7 @@
 (reader/register-tag-parser! "cpfile"  add-classpath-path-file-to-sources)
 
 (defn ^:private eval-cljs [cljs-file]
-  (lumo.repl/execute "file" cljs-file true true nil)
+  (lumo.repl/execute "file" cljs-file true true nil 0)
   `[])
 
 (reader/register-tag-parser! "eval" eval-cljs)
@@ -404,7 +404,7 @@
   (postwalk (fn [x]
               (cond (and (list? x) (= 'require (first x)))
                     (do
-                      (lumo.repl/execute "text" (str x) true false nil)
+                      (lumo.repl/execute "text" (str x) true false nil 0)
                       nil)
 
                     ;; Auto require

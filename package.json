@@ -28,7 +28,7 @@
   "homepage": "https://github.com/juxt/mach#README.md",
   "dependencies": {
     "ini": "^1.3.4",
-    "lumo-cljs": "1.3.0",
+    "lumo-cljs": "1.4.1",
     "toposort": "^1.0.0"
   }
 }

@@ -434,7 +434,7 @@
                                      preprocess-resolve-refs]))
 
 (defn mach [input]
-  (let [[opts args] (split-opts-and-args {} (drop 5 (.-argv nodejs/process)))
+  (let [[opts args] (split-opts-and-args {} (rest (drop-while #(not= "mach/core.cljs" %) (.-argv nodejs/process))))
         machfile (-> opts
                      (get :f "Machfile.edn")
                      (fs.readFileSync "utf-8")

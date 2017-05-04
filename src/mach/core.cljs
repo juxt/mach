@@ -8,6 +8,7 @@
    [cljs.reader :as reader]
    [cljs.js :as cljs]
    [lumo.repl :as repl]
+   [lumo.classpath]
    [clojure.walk :refer [postwalk]]
    [clojure.string :as str]))
 
@@ -378,7 +379,7 @@
       (when-not (and (fs.existsSync cp-hash-file)
                      (= (hash deps) (reader/read-string (fs.readFileSync cp-hash-file "utf-8"))))
         (write-classpath cp-file cp-hash-file deps))
-      (js/$$LUMO_GLOBALS.addSourcePaths (clojure.string/split (str (fs.readFileSync cp-file)) ":"))))
+      (lumo.classpath/add! (clojure.string/split (str (fs.readFileSync cp-file)) ":"))))
   machfile)
 
 (defn- preprocess-classpath [machfile]

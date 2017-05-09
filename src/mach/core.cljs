@@ -126,14 +126,13 @@
 (reader/register-tag-parser! "$$" read-shell-apply)
 
 (defn add-classpath-path-to-sources [cp-file]
-  ;; TODO make work in Windows use a diff separator
-  (js/$$LUMO_GLOBALS.addSourcePaths [cp-file])
+  (lumo.classpath/add! [cp-file])
   `[])
 
 (reader/register-tag-parser! "cp"  add-classpath-path-to-sources)
 
 (defn add-classpath-path-file-to-sources [cp-file]
-   (js/$$LUMO_GLOBALS.addSourcePaths (clojure.string/split (str (fs.readFileSync cp-file)) ":"))
+  (lumo.classpath/add! (clojure.string/split (str (fs.readFileSync cp-file)) ":"))
   `[])
 
 (reader/register-tag-parser! "cpfile"  add-classpath-path-file-to-sources)
@@ -388,7 +387,7 @@
 
 (defn- preprocess-classpath [machfile]
   (when-let [cp (get machfile 'mach/classpath)]
-    (js/$$LUMO_GLOBALS.addSourcePaths cp)))
+    (lumo.classpath/add! cp)))
 
 (defn- preprocess-props [machfile]
   (if-let [props (get machfile 'mach/props)]

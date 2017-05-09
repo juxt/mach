@@ -18,6 +18,7 @@
 
 (def toposort (nodejs/require "toposort"))
 (def path (nodejs/require "path"))
+(def temp (nodejs/require "tmp"))
 
 (defn target-order [machfile target-name]
   (map symbol
@@ -101,15 +102,18 @@
 
 (defn sh [& args]
   (let [args (flatten args)
-        _  (apply println "$" args)
+        _ (apply println "$" args)
+        temp (temp.tmpNameSync)
         result (.spawnSync child_process
                            (first args)
-                           (clj->js (map (comp #(str/replace % "'" "\\'")
-                                               #(str/replace % "|" "\\|")) (rest args)))
+                           (clj->js (concat (map (comp #(str/replace % "'" "\\'")
+                                                       #(str/replace % "|" "\\|")) (rest args))
+                                            ["|" "tee" temp]))
                            #js {"shell" true
                                 "stdio" "inherit"})]
-    (when (.-stdout result)
-      (.trim (str (.-stdout result))))))
+
+    ;; TODO Handle stderror
+    (.trim (str (fs.readFileSync temp)))))
 
 (defn ^:private read-shell [vals]
   `(sh ~@vals))

@@ -194,7 +194,6 @@
 
 (defn- map-props-onto-extension-target [target props]
   (postwalk (fn [v]
-              (type v)
               (if (symbol? v)
                 (get props v v) v))
             target))
@@ -356,10 +355,11 @@
   machfile)
 
 (defn- preprocess-import [machfile]
-  (into machfile
-        (for [[extension props] (get machfile 'mach/import)
-              [ext-k ext-target] (load-extension extension)]
-          [ext-k (map-props-onto-extension-target ext-target props)])))
+  (when-let [imports (get machfile 'mach/import)]
+    (into machfile
+          (for [[extension props] imports
+                [ext-k ext-target] (load-extension extension)]
+            [ext-k (map-props-onto-extension-target ext-target props)]))))
 
 (defn- write-classpath [cp-file cp-hash-file deps]
   (println "Writing Mach classpath to" cp-file)

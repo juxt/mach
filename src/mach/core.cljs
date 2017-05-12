@@ -432,12 +432,14 @@
                                      preprocess-init
                                      preprocess-resolve-refs]))
 
-(defn mach [{:keys [file tasks]
+(defn mach [{:keys [file tasks constant]
              :or {file "Machfile.edn"
-                  tasks '[default]}}]
+                  tasks '[default]
+                  constant {}}}]
   (let [machfile (-> file
                      (fs.readFileSync "utf-8")
                      reader/read-string
+                     (update 'mach/constant merge constant)
                      preprocess)]
     (try
       (binding [cljs/*eval-fn* repl/caching-node-eval]
@@ -478,12 +480,18 @@
                                  "describe" "Specify location of Machfile"
                                  "requiresArg" true
                                  "string" true})
+            (.option "constant" #js {"describe" "Override the mach/constants section of your Machfile"
+                                     "requiresArg" true
+                                     "string" true
+                                     "coerce" (fn [constant]
+                                                (reader/read-string constant))})
             (.example "-f ~/myfile.edn" "Specify myfile.edn as location for Machfile")
+            (.example "--constant '{environment :prod}'" "Override envrionment key in Machfile")
             (.epilog "Copyright © 2016-2017, JUXT LTD.")
             (.help)
             (.parse (clj->js (sequence args)))
             (js->clj :keywordize-keys true)
             ;; yargs adds the keys as "nil" when you use .option, but :or works better if you don't even have the key
-            (dissoc-nil :file :f)
+            (dissoc-nil :file :f :constant)
             (rename-keys {:_ :tasks})
             (update :tasks #(when (seq %) (map symbol %))))))

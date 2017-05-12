@@ -391,3 +391,19 @@ judicious use of AOT to speed things are further - by utilising
 file-system dates, it is possible to detect staleness and fix it when
 necessary - say if a project.clj is determined to be newer then the
 classpath can be regenerated.
+
+== Development
+
+To test locally set `$MACH_HOME` to the directory containing your local copy of
+this directory. If you're in it, you can do this:
+
+[source,shell]
+----
+export MACH_HOME="$(pwd)"
+----
+
+If you have a globally installed mach, it will run the one in this directory
+whilst that environment variable is set.
+
+If you have modified the `bin/mach` file, you will need to call it directly, as
+well as setting `$MACH_HOME`

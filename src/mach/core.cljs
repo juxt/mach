@@ -3,6 +3,7 @@
 (ns mach.core
   (:refer-clojure :exclude [import])
   (:require
+   [clojure.set :refer [rename-keys]]
    [cljs.nodejs :as nodejs]
    [cljs.pprint :as pprint]
    [cljs.reader :as reader]
@@ -19,6 +20,7 @@
 (def toposort (nodejs/require "toposort"))
 (def path (nodejs/require "path"))
 (def temp (nodejs/require "tmp"))
+(def yargs (nodejs/require "yargs"))
 
 (defn target-order [machfile target-name]
   (map symbol
@@ -341,13 +343,6 @@
     (for [verb (if verbs (map symbol verbs) [nil])]
       [target-symbol verb])))
 
-(defn- split-opts-and-args [opts args]
-  (let [[k v & rest-args] args]
-    (if (and k v (re-find #"^\-\w$" k))
-      (split-opts-and-args (assoc opts (keyword (.substring k 1)) v)
-                           rest-args)
-      [opts args])))
-
 (defn- preprocess-init [machfile]
   (when-let [target (get machfile 'mach/init)]
     (cljs/eval repl/st target identity))
@@ -437,16 +432,16 @@
                                      preprocess-init
                                      preprocess-resolve-refs]))
 
-(defn mach [input]
-  (let [[opts args] (split-opts-and-args {} (rest (drop-while #(not= "mach/core.cljs" %) (.-argv nodejs/process))))
-        machfile (-> opts
-                     (get :f "Machfile.edn")
+(defn mach [{:keys [file tasks]
+             :or {file "Machfile.edn"
+                  tasks '[default]}}]
+  (let [machfile (-> file
                      (fs.readFileSync "utf-8")
                      reader/read-string
                      preprocess)]
     (try
       (binding [cljs/*eval-fn* repl/caching-node-eval]
-        (when-not (->> (or (seq (map symbol args)) ['default])
+        (when-not (->> tasks
                        (mapcat (partial expand-out-target-and-verbs machfile))
                        (reduce (fn [m target-verb]
                                  (if (contains? m target-verb)
@@ -464,5 +459,31 @@
           (println message)
           (println "Error:" e))))))
 
-;; Main
-(mach [])
+(defn- dissoc-nil
+  "Remove keys if they are nil"
+  ([m k]
+   (if (nil? (get m k))
+     (dissoc m k)
+     m))
+  ([m k & ks]
+   (let [ret (dissoc-nil m k)]
+     (if ks
+       (recur ret (first ks) (next ks))
+       ret))))
+
+(defn -main
+  [& args]
+  (mach (-> yargs
+            (.option "file" #js {"alias" "f"
+                                 "describe" "Specify location of Machfile"
+                                 "requiresArg" true
+                                 "string" true})
+            (.example "-f ~/myfile.edn" "Specify myfile.edn as location for Machfile")
+            (.epilog "Copyright © 2016-2017, JUXT LTD.")
+            (.help)
+            (.parse (clj->js (sequence args)))
+            (js->clj :keywordize-keys true)
+            ;; yargs adds the keys as "nil" when you use .option, but :or works better if you don't even have the key
+            (dissoc-nil :file :f)
+            (rename-keys {:_ :tasks})
+            (update :tasks #(when (seq %) (map symbol %))))))

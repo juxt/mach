@@ -3,12 +3,13 @@
 # Mach
 # Copyright © 2016-2017, JUXT LTD.
 
+mkdir -p .mach
 export MACH_HOME=${MACH_HOME:-$(npm -g root)/\@juxt/mach}
 
 if [ $# -gt 0 ]; then
-    ARGS=$*
+    ARGS=("$@")
 else
-    ARGS=main
+    ARGS=(main)
 fi
 
-NODE_PATH="${MACH_HOME}/node_modules" ${MACH_HOME}/node_modules/.bin/lumo -k .mach/lumo-cache -c ${MACH_HOME}/src:${MACH_CLASSPATH} mach/core.cljs $ARGS
+NODE_PATH="${MACH_HOME}/node_modules" ${MACH_HOME}/node_modules/.bin/lumo -k .mach/lumo-cache -c ${MACH_HOME}/src:${MACH_CLASSPATH} -m mach.core "${ARGS[@]}"

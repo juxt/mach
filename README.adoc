@@ -272,12 +272,12 @@ You can use other ClojureScript libraries in your Machfile, for example
 [source,clojure]
 ----
 {
-mach/m2 [[aero "1.1.2"]]
+mach/dependencies [[aero "1.1.2"]]
 print-config (println (aero.core/read-config "config.edn" {}))
 }
 ----
 
-The `m2` directive uses https://github.com/boot-clj/boot[Boot] to
+The `dependencies` directive uses https://github.com/boot-clj/boot[Boot] to
 fetch Maven dependencies and to inject these dependencies directly
 onto the Lumo/Mach classpath. Note, Boot is only invoked when the
 declared dependencies vector has changed.

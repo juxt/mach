@@ -45,6 +45,7 @@
 
 (def fs (nodejs/require "fs"))
 (def child_process (nodejs/require "child_process"))
+(def constants (nodejs/require "constants"))
 
 (defn file-exists? [f]
   (fs.existsSync f))
@@ -362,10 +363,12 @@
                            (clj->js (concat (mapv (fn [[sym v]] (str "-d " sym ":" (or v "RELEASE"))) deps)
                                             ["with-cp" "--write" "--file" cp-file]))
                            #js {"shell" true})]
-    (when-not (and (= 0 (.-status result)) (fs.existsSync cp-file))
-      (throw (js/Error. (str "Could not write classpath to " cp-file))))
-
-    (fs.writeFileSync cp-hash-file (hash deps))))
+    (if-not (= 0 (.-status result))
+      (do (println (.toString (.-stderr result) "utf8"))
+          (throw (js/Error. (str "Error while resolving dependencies"))))
+      (fs.writeFileSync cp-hash-file
+                        (hash deps)
+                        #js {"flag" (bit-or constants.O_CREAT constants.O_SYNC constants.O_RDWR)}))))
 
 (defn- preprocess-dependencies [machfile]
   (when-let [deps (or (get machfile 'mach/dependencies)

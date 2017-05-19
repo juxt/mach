@@ -11,6 +11,7 @@
    [lumo.repl :as repl]
    [lumo.classpath]
    [clojure.walk :refer [postwalk]]
+   [clojure.set :refer [map-invert]]
    [clojure.string :as str]))
 
 (defonce ^:private st (cljs/empty-state))
@@ -21,18 +22,68 @@
 (def path (nodejs/require "path"))
 (def temp (nodejs/require "tmp"))
 (def yargs (nodejs/require "yargs"))
+(def mm (nodejs/require "micromatch"))
 
-(defn target-order [machfile target-name]
-  (map symbol
-       (drop 1 ; drop nil
-             (js->clj
-              (toposort
-               (clj->js
-                (tree-seq
-                 (fn [[_ target-name]] (-> machfile (get target-name) (get 'depends)))
-                 (fn [[_ target-name]]
-                   (map vector (repeat target-name) (-> machfile (get target-name) (get 'depends))))
-                 [nil target-name])))))))
+(defrecord Glob [glob])
+(reader/register-tag-parser! "mach/glob" (fn [glob] (->Glob glob)))
+
+(defprotocol Target
+  (match? [this machfile]))
+
+(extend-protocol Target
+  cljs.core/Symbol
+  (match? [this target-name]
+    (= this (symbol target-name)))
+  Glob
+  (match? [this target-name]
+    (mm.isMatch (str target-name) (:glob this))))
+
+(defn resolve-target
+  "Retrieve target-name from machfile as appropriate target with context added"
+  [machfile target-name]
+  (when-let [[matcher target]
+             (or
+               ;; TODO: Make is smarter about this, e.g. it prefers to
+               ;; foo.min.js over foo.js when there is a target for both *.js
+               ;; and *.min.js
+               ;; We are currently non-deterministic in that case
+               (some (fn [[k v]]
+                       (when (match? k (str target-name))
+                         [k v]))
+                     machfile)
+               ;; Else try to search for product
+               ;; TODO: Does this make sense anymore now globs are available?
+               ;; strings can be added for static "products" also
+               (some (fn [[k v]]
+                       (when (= target-name (get v 'product ::sentinel))
+                         [k v]))
+                     machfile))]
+    (assoc target
+           :mach/_target-ctx target-name
+           :mach/_matcher-ctx matcher)))
+
+(defn target-order [machfile target]
+  (let [deps (tree-seq
+               (fn [[_ target]]
+                 (and (map? target)
+                      (contains? target 'depends)))
+               (fn [[_ target]]
+                 (map (fn [target dependency]
+                        [target (resolve-target machfile dependency)])
+                      (repeat target)
+                      (get target 'depends)))
+               [nil target])
+        ;; We want to use clojure's equality semantics with js, so we must turn
+        ;; them to something that js can do equality on
+        lookup (zipmap (into #{} cat deps)
+                       (repeatedly (comp str gensym)))
+        reverse-lookup (map-invert lookup)]
+    (->> deps
+         (map (fn [[k v]] [(lookup k) (lookup v)]))
+         (clj->js)
+         toposort
+         (map reverse-lookup)
+         rest)))
 
 ;; References
 
@@ -211,7 +262,7 @@
 
 (defmulti apply-verb
   "Return boolean to indicate if work was done (true) or not (false)"
-  (fn [machfile [target-name target] verb] verb))
+  (fn [machfile target verb] verb))
 
 (defmethod apply-verb :default [_ _ verb]
   (throw (ex-info (str "Unknown verb: '" verb "'") {})))
@@ -254,7 +305,7 @@
     ;; We did work so return true
     true))
 
-(defmethod apply-verb nil [machfile [target-name target] verb]
+(defmethod apply-verb nil [machfile target verb]
   (if-let [novelty-form (and (map? target) (get target 'novelty))]
     (let [novelty (eval-rule novelty-form target machfile)]
       ;; Call update!
@@ -266,14 +317,14 @@
     (update! machfile target)))
 
 ;; Run the update (or produce) and print, no deps
-(defmethod apply-verb 'update [machfile [target-name target] verg]
+(defmethod apply-verb 'update [machfile target verg]
   (update! machfile target))
 
 ;; Print the produce
-(defmethod apply-verb 'print [machfile [target-name target] verb]
+(defmethod apply-verb 'print [machfile target verb]
   (update! machfile target :post-op (fn [v _] (println v))))
 
-(defmethod apply-verb 'clean [machfile [target-name target] verb]
+(defmethod apply-verb 'clean [machfile target verb]
   (if-let [rule (get target 'clean!)]
     ;; If so, call it
     (eval-rule rule target machfile)
@@ -290,59 +341,53 @@
           :otherwise false))))
   true)
 
-(defmethod apply-verb 'depends [machfile [target-name target] verb]
+(defmethod apply-verb 'depends [machfile target verb]
   (pprint/pprint
-   (target-order machfile target-name))
+    (map :mach/_matcher-ctx (target-order machfile target)))
   true)
 
-(defmethod apply-verb 'novelty [machfile [target-name target] verb]
+(defmethod apply-verb 'novelty [machfile target verb]
   (pprint/pprint
    (when-let [novelty (get target 'novelty)]
      (eval-rule novelty target machfile))))
 
-(defn resolve-target
-  "Resolve target key (symbol) matching given target (string) in machfile.
-   Once a target has been resolved, it is also validated."
+(defn resolve-validate-target
+  "Resolve and validate a target from a machfile"
   [machfile target-name]
-  (if-let [target-symbol (or (and (contains? machfile (symbol target-name)) (symbol target-name))
-                             ;; Else try to search for product
-                             (some (fn [[k v]]
-                                     (when (= target-name (get v 'product))
-                                       k))
-                                   machfile))]
-    (let [target (get machfile target-symbol)]
+  (if-let [target (resolve-target machfile target-name)]
+    (do
       ;; validate target contract:
       (when (and (get target 'produce)
                  (get target 'update!))
         (throw (ex-info "Invalid to have both update! and produce in the same target" {:target target})))
       ;; Validate dependency tree:
-      (doseq [dep-target (rest (target-order machfile target-symbol))]
-        (when-not (get machfile dep-target)
+      (doseq [dep-target (rest (target-order machfile target))]
+        (when-not (resolve-target machfile dep-target)
           (throw (ex-info (str "Target dependency not found: " dep-target) {}))))
-      target-symbol)
+      target)
     (throw (ex-info (str "Could not resolve target: " target-name) {}))))
 
 (defn execute-plan [machfile build-plan]
-  (into {} (for [[target-symbol verb] build-plan]
-             [[target-symbol verb]
-              (apply-verb machfile [target-symbol (get machfile target-symbol)] verb)])))
+  (into {} (for [[target verb] build-plan]
+             [[target verb]
+              (apply-verb machfile target verb)])))
 
-(defn build-plan [machfile [target-symbol verb]]
+(defn build-plan [machfile [target verb]]
   (for [dependency-target (case verb
                             nil
-                            (reverse (target-order machfile target-symbol))
+                            (reverse (target-order machfile target))
 
                             'clean
-                            (target-order machfile target-symbol)
+                            (target-order machfile target)
 
-                            [target-symbol])]
+                            [target])]
     [dependency-target verb]))
 
 (defn- expand-out-target-and-verbs [machfile target+verbs]
   (let [[target-name & verbs] (str/split target+verbs ":")
-        target-symbol (resolve-target machfile target-name)]
+        target (resolve-validate-target machfile target-name)]
     (for [verb (if verbs (map symbol verbs) [nil])]
-      [target-symbol verb])))
+      [target verb])))
 
 (defn- preprocess-init [machfile]
   (when-let [target (get machfile 'mach/init)]
@@ -448,13 +493,14 @@
       (binding [cljs/*eval-fn* repl/caching-node-eval]
         (when-not (->> tasks
                        (mapcat (partial expand-out-target-and-verbs machfile))
-                       (reduce (fn [m target-verb]
+                       (reduce (fn [m [target verb :as target-verb]]
                                  (if (contains? m target-verb)
-                                   (println (str "mach: '" (if-let [verb (second target-verb)]
-                                                             (str (first target-verb) ":" verb) (first target-verb))
+                                   (println (str "mach: '" (str (:mach/_matcher-ctx target-verb)
+                                                                (when verb (str ":" verb)))
                                                  "' is up to date."))
                                    (let [build-plan (build-plan machfile target-verb)]
-                                     (merge m (execute-plan machfile build-plan))))) {})
+                                     (merge m (execute-plan machfile build-plan)))))
+                               {})
                        (vals)
                        (some identity))
           (println "Nothing to do!")))

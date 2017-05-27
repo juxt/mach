@@ -278,13 +278,25 @@
   [expr target]
   (postwalk (fn [x] (or (and (symbol? x) (get target x)) x)) expr))
 
+(def ^:dynamic *target-ctx* nil)
+(def ^:dynamic *matcher-ctx* nil)
+
+(defn- with-target-ctx-bindings
+  [expr target]
+  (list 'binding (into [] cat (-> target
+                                  (select-keys [:mach/_target-ctx :mach/_matcher-ctx])
+                                  (rename-keys {:mach/_target-ctx 'mach.core/*target-ctx*
+                                                :mach/_matcher-ctx 'mach.core/*matcher-ctx*})))
+        expr))
+
 (defn- eval-rule
   "Evals Mach rule and returns the result if successful, throws an
   error if not."
   [code target machfile]
   (let [code (-> code
                  (resolve-symbols target)
-                 (with-prop-bindings machfile))]
+                 (with-prop-bindings machfile)
+                 (with-target-ctx-bindings target))]
     ;; Eval the code
     (let [{:keys [value error]} (cljs/eval repl/st code identity)]
       (when error

@@ -361,7 +361,7 @@
   (let [result (.spawnSync child_process
                            "boot"
                            (clj->js (concat (mapv (fn [[sym v]] (str "-d " sym ":" (or v "RELEASE"))) deps)
-                                            ["with-cp" "--write" "--file" cp-file]))
+                                            ["-B" "with-cp" "--write" "--file" cp-file]))
                            #js {"shell" true})]
     (if-not (= 0 (.-status result))
       (do (println (.toString (.-stderr result) "utf8"))

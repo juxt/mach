@@ -426,6 +426,19 @@
                 x))
             mach-config))
 
+(defn- preprocess-eval-product
+  "product can be an expression, eval it."
+  [mach-config]
+  (into {}
+        (for [[k m] mach-config]
+          [k (if-let [product (and (map? m) (get m 'product))]
+               (let [code (with-prop-bindings `(identity ~product) mach-config)
+                     {:keys [value error]} (cljs/eval repl/st code identity)]
+                 (when error
+                   (throw (js/Error. (str "Could not eval form " code ", got error: " error))))
+                 (assoc m 'product value))
+               m)])))
+
 (defn preprocess [machfile]
   (reduce #(or (%2 %1) %1) machfile [preprocess-dependencies
                                      preprocess-classpath
@@ -433,7 +446,8 @@
                                      preprocess-props
                                      preprocess-import
                                      preprocess-init
-                                     preprocess-resolve-refs]))
+                                     preprocess-resolve-refs
+                                     preprocess-eval-product]))
 
 (defn mach [{:keys [file tasks constant]
              :or {file "Machfile.edn"

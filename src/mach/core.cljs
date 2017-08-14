@@ -503,7 +503,7 @@
                                      "coerce" (fn [constant]
                                                 (reader/read-string constant))})
             (.example "-f ~/myfile.edn" "Specify myfile.edn as location for Machfile")
-            (.example "--constant '{environment :prod}'" "Override envrionment key in Machfile")
+            (.example "--constant '{environment :prod}'" "Override environment key in Machfile")
             (.epilog "Copyright © 2016-2017, JUXT LTD.")
             (.help)
             (.parse (clj->js (sequence args)))

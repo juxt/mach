@@ -12,4 +12,4 @@ else
     ARGS=(main)
 fi
 
-NODE_PATH="${MACH_HOME}/node_modules" ${MACH_HOME}/node_modules/.bin/lumo -k .mach/lumo-cache -c ${MACH_HOME}/src:${MACH_CLASSPATH} -m mach.core "${ARGS[@]}"
+NODE_PATH="${MACH_HOME}/node_modules" ${MACH_HOME}/node_modules/.bin/lumo -c ${MACH_HOME}/lib/andare-0.7.0.jar -k .mach/lumo-cache -c ${MACH_HOME}/src:${MACH_CLASSPATH} -m mach.core "${ARGS[@]}"

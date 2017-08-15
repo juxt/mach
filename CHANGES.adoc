@@ -56,3 +56,7 @@ not yet possible to specify verbs via a depends declaration.
 - Fixes #36, simpler auto-requires rule
 
 - When determining dependencies, omit current Boot script.
+
+== [1.4.4]
+
+- Mach code blocks are `core.async` go loops.

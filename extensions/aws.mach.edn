@@ -1,2 +1,2 @@
 {ips (do (assert aws-profile "You need to set an AWS profile, passed in as aws-profile")
-         #$ ["aws" "ec2" "--output" "text" "--query" "Reservations[].Instances[].[Tags[?Key=='Name'].Value|[0],PublicIpAddress]" "--filters=Name=instance-state-name,Values=running" "--profile" aws-profile "describe-instances"])}
+         #$ ["aws" "ec2" "--output" "text" "--query" "\"Reservations[].Instances[].[Tags[?Key=='Name'].Value|[0],PublicIpAddress]\"" "--filters=Name=instance-state-name,Values=running" "--profile" aws-profile "describe-instances"])}

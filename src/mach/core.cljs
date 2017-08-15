@@ -11,7 +11,10 @@
    [lumo.repl :as repl]
    [lumo.classpath]
    [clojure.walk :refer [postwalk]]
-   [clojure.string :as str]))
+   [clojure.string :as str]
+   [cljs.core.async :as a])
+  (:require-macros [cljs.core.async.impl.ioc-macros :as ioc]
+                   [cljs.core.async.macros :refer [go go-loop]]))
 
 (defonce ^:private st (cljs/empty-state))
 
@@ -21,6 +24,7 @@
 (def path (nodejs/require "path"))
 (def temp (nodejs/require "tmp"))
 (def yargs (nodejs/require "yargs"))
+(def process (nodejs/require "process"))
 
 (defn target-order [machfile target-name]
   (map symbol
@@ -104,22 +108,26 @@
                                        (mach.core/file-seq source)))))
 
 (defn sh [& args]
-  (let [args (flatten args)
-        _ (apply println "$" args)
-        temp (temp.tmpNameSync)
-        result (.spawnSync child_process
-                           (first args)
-                           (clj->js (concat (map (comp #(str/replace % "'" "\\'")
-                                                       #(str/replace % "|" "\\|")) (rest args))
-                                            ["|" "tee" temp]))
-                           #js {"shell" true
-                                "stdio" "inherit"})]
-
-    ;; TODO Handle stderror
-    (.trim (str (fs.readFileSync temp)))))
+  ;; TODO check code and barf if non-zero?
+  (go
+    (let [args (flatten args)
+          _ (apply println "$" args)
+          b (atom (js/Buffer.alloc 10))
+          cp (.spawn child_process
+                     (first args)
+                     (clj->js (rest args))
+                     #js {"shell" true})
+          c (a/chan)]
+      (.on (.-stdout cp) "data"
+           (fn [d]
+             (.write (.-stdout process) d)
+             (swap! b #(js/Buffer.concat (clj->js [% d])))))
+      (.on (.-stderr cp) "data" (fn [d] (.write (.-stderr process) d)))
+      (.on cp "close" (fn [d] (go (a/>! c (.trim (.toString @b))))))
+      (a/<! c))))
 
 (defn ^:private read-shell [vals]
-  `(sh ~@vals))
+  `(cljs.core.async/<! (sh ~@vals)))
 
 (reader/register-tag-parser! "$" read-shell)
 
@@ -148,6 +156,17 @@
 
 (def ^:private extensions-cache (atom {}))
 
+(def ^{:doc "load-fn is not defined for async callbacks"}
+  load-fn cljs.js/*load-fn*)
+
+(defn code-eval [code]
+  (binding [cljs/*eval-fn* repl/caching-node-eval
+            cljs.js/*load-fn* load-fn]
+    (let [{:keys [value error] :as res} (cljs/eval repl/st code identity)]
+      (if error
+        (throw (js/Error. (str "Could not eval form " code ", got error: " error)))
+        value))))
+
 (declare preprocess)
 
 (defn find-extension-file
@@ -173,26 +192,29 @@
                                (clj->js ["-o" extensions-file extension])
                                #js {"shell" true})]
         (when-not (and (= 0 (.-status result)) (fs.existsSync extensions-file))
-              (println (str (.-stdout result)))
-              (println (str (.-stderr result)))
+          (println (str (.-stdout result)))
+          (println (str (.-stderr result)))
 
           (throw (js/Error. (str "Could not fetch extension " extensions-file))))))
 
     (reader/read-string (fs.readFileSync extensions-file "utf-8"))))
 
-(defn ^:private add-extension [extensions extension]
-  (assoc extensions extension (preprocess (cond (and (string? extension) (re-find #"^https?://.*" extension))
-                                                (fetch-extension-file extension)
+(defn- load-extension-no-cache [extension]
+  (go
+    (let [extension-code (cond (and (string? extension) (re-find #"^https?://.*" extension))
+                               (fetch-extension-file extension)
 
-                                                :default
-                                                (read-extension-file extension)))))
+                               :default
+                               (read-extension-file extension))]
+      (a/<! (preprocess extension-code)))))
 
 (defn- load-extension [extension]
-  (let [extensions (or (get @extensions-cache extension)
-                       (get (swap! extensions-cache add-extension extension) extension))]
-    (when-not extensions
-      (throw (js/Error. (str "Could not find extensions file for extension " extension))))
-    extensions))
+  (go
+    (or (get @extensions-cache extension)
+      (let [loaded-extension (a/<! (load-extension-no-cache extension))
+            extensions (swap! extensions-cache assoc extension loaded-extension)]
+        (or (get extensions extension)
+            (throw (js/Error. (str "Could not find extensions file for extension " extension))))))))
 
 (defn- map-props-onto-extension-target [target props]
   (postwalk (fn [v]
@@ -201,13 +223,16 @@
             target))
 
 (defn import [[target args]]
-  (let [[extension k] (str/split (str target) "/")]
-    (-> extension
-        load-extension
-        (get (symbol k))
-        (map-props-onto-extension-target args))))
+  (go
+    (let [[extension k] (str/split (str target) "/")]
+      (-> (a/<! (load-extension extension))
+          (-> (get (symbol k))
+              (map-props-onto-extension-target args))))))
 
-(reader/register-tag-parser! "import" import)
+(defn import-tag [v]
+  `(cljs.core.async/<!) (import ~v))
+
+(reader/register-tag-parser! "import" import-tag)
 
 (defmulti apply-verb
   "Return boolean to indicate if work was done (true) or not (false)"
@@ -227,18 +252,19 @@
   [expr target]
   (postwalk (fn [x] (or (and (symbol? x) (get target x)) x)) expr))
 
+(defn- with-async-go [code]
+  `(identity (cljs.core.async.macros/go
+               ~code)))
+
 (defn- eval-rule
   "Evals Mach rule and returns the result if successful, throws an
   error if not."
   [code target machfile]
-  (let [code (-> code
-                 (resolve-symbols target)
-                 (with-prop-bindings machfile))]
-    ;; Eval the code
-    (let [{:keys [value error]} (cljs/eval repl/st code identity)]
-      (when error
-        (throw (js/Error. (str "Could not eval form " code ", got error: " error))))
-      value)))
+  (-> code
+      (resolve-symbols target)
+      (with-prop-bindings machfile)
+      (with-async-go)
+      code-eval))
 
 (defn- spit-product [v target]
   (when-let [product (and (get target 'produce) (get target 'product))]
@@ -247,58 +273,64 @@
 
 (defn update! [machfile target & {:keys [post-op]
                                   :or {post-op spit-product}}]
-  (let [code (if (map? target) (some target ['produce 'update!]) target)]
-    (-> code
-        (eval-rule target machfile)
-        (post-op target))
-    ;; We did work so return true
-    true))
+  (go
+    (let [code (if (map? target) (some target ['produce 'update!]) target)
+          v (a/<! (eval-rule code target machfile))]
+      (post-op v target)
+      ;; We did work so return true
+      true)))
 
 (defmethod apply-verb nil [machfile [target-name target] verb]
-  (if-let [novelty-form (and (map? target) (get target 'novelty))]
-    (let [novelty (eval-rule novelty-form target machfile)]
-      ;; Call update!
-      (when (or (true? novelty)
-                (and (seq? novelty) (not-empty novelty)))
-        (update! machfile (assoc target 'novelty `(quote ~novelty)))))
+  (go
+    (if-let [novelty-form (and (map? target) (get target 'novelty))]
+      (let [novelty (a/<! (eval-rule novelty-form target machfile))]
+        ;; Call update!
+        (when (or (true? novelty)
+                  (and (seq? novelty) (not-empty novelty)))
+          (update! machfile (assoc target 'novelty `(quote ~novelty)))))
 
-    ;; Target is an expr or there is no novelty, press on:
-    (update! machfile target)))
+      ;; Target is an expr or there is no novelty, press on:
+      (update! machfile target))))
 
 ;; Run the update (or produce) and print, no deps
 (defmethod apply-verb 'update [machfile [target-name target] verg]
-  (update! machfile target))
+  (go
+    (update! machfile target)))
 
 ;; Print the produce
 (defmethod apply-verb 'print [machfile [target-name target] verb]
-  (update! machfile target :post-op (fn [v _] (println v))))
+  (go
+    (update! machfile target :post-op (fn [v _] (println v)))))
 
 (defmethod apply-verb 'clean [machfile [target-name target] verb]
-  (if-let [rule (get target 'clean!)]
-    ;; If so, call it
-    (eval-rule rule target machfile)
-    ;; Otherwise implied policy is to delete declared target files
-    (when-let [product (get target 'product)]
-      (if (coll? product)
-        (if (some dir? product)
-          (apply sh "rm" "-rf" product)
-          (apply sh "rm" "-f" product))
-        (cond
-          (dir? product) (sh "rm" "-rf" product)
-          (file-exists? product) (sh "rm" "-f" product)
-          ;; er? this is overridden later
-          :otherwise false))))
-  true)
+  (go
+    (if-let [rule (get target 'clean!)]
+      ;; If so, call it
+      (<! (eval-rule rule target machfile))
+      ;; Otherwise implied policy is to delete declared target files
+      (when-let [product (get target 'product)]
+        (if (coll? product)
+          (if (some dir? product)
+            (apply sh "rm" "-rf" product)
+            (apply sh "rm" "-f" product))
+          (cond
+            (dir? product) (sh "rm" "-rf" product)
+            (file-exists? product) (sh "rm" "-f" product)
+            ;; er? this is overridden later
+            :otherwise false))))
+    true))
 
 (defmethod apply-verb 'depends [machfile [target-name target] verb]
-  (pprint/pprint
-   (target-order machfile target-name))
-  true)
+  (go
+    (pprint/pprint
+     (target-order machfile target-name))
+    true))
 
 (defmethod apply-verb 'novelty [machfile [target-name target] verb]
-  (pprint/pprint
-   (when-let [novelty (get target 'novelty)]
-     (eval-rule novelty target machfile))))
+  (go
+    (pprint/pprint
+     (when-let [novelty (get target 'novelty)]
+       (eval-rule novelty target machfile)))))
 
 (defn resolve-target
   "Resolve target key (symbol) matching given target (string) in machfile.
@@ -322,11 +354,6 @@
       target-symbol)
     (throw (ex-info (str "Could not resolve target: " target-name) {}))))
 
-(defn execute-plan [machfile build-plan]
-  (into {} (for [[target-symbol verb] build-plan]
-             [[target-symbol verb]
-              (apply-verb machfile [target-symbol (get machfile target-symbol)] verb)])))
-
 (defn build-plan [machfile [target-symbol verb]]
   (for [dependency-target (case verb
                             nil
@@ -338,6 +365,36 @@
                             [target-symbol])]
     [dependency-target verb]))
 
+(defn execute-plan [machfile build-plan]
+  (go-loop [results {} [target-and-verb & build-plan] build-plan]
+    (if-let [[target-symbol verb] target-and-verb]
+      (recur
+       (assoc results [target-symbol verb]
+              (a/<! (apply-verb machfile
+                                [target-symbol (get machfile target-symbol)] verb)))
+       build-plan)
+      results)))
+
+(defn execute-plan-async [machfile target-verbs]
+  (let [execution-plans (a/chan)]
+    (go
+      ;; Make the plan
+      (doseq [target-verb target-verbs]
+        (a/>! execution-plans [target-verb (build-plan machfile target-verb)]))
+      (a/close! execution-plans))
+
+    ;; Execute the plan
+    (go-loop [results {}]
+      (when-let [[target-verb build-plan] (a/<! execution-plans)]
+        (if (contains? results target-verb)
+          (println (str "mach: '" (if-let [verb (second target-verb)]
+                                    (str (first target-verb) ":" verb)
+                                    (first target-verb))
+                        "' is up to date."))
+          (let [plan-result (a/<! (execute-plan machfile build-plan))]
+            (recur (merge results plan-result)))))
+      results)))
+
 (defn- expand-out-target-and-verbs [machfile target+verbs]
   (let [[target-name & verbs] (str/split target+verbs ":")
         target-symbol (resolve-target machfile target-name)]
@@ -345,16 +402,20 @@
       [target-symbol verb])))
 
 (defn- preprocess-init [machfile]
-  (when-let [target (get machfile 'mach/init)]
-    (cljs/eval repl/st target identity))
-  machfile)
+  (go
+    (some-> machfile
+            (get 'mach/init)
+            (code-eval))
+    machfile))
 
 (defn- preprocess-import [machfile]
-  (when-let [imports (get machfile 'mach/import)]
-    (into machfile
-          (for [[extension props] imports
-                [ext-k ext-target] (load-extension extension)]
-            [ext-k (map-props-onto-extension-target ext-target props)]))))
+  (go-loop [machfile machfile [import & imports] (get machfile 'mach/import)]
+    (if-let [[extension props] import]
+      (let [exts (into {}
+                       (for [[ext-k ext-target] (a/<! (load-extension extension))]
+                         [ext-k (map-props-onto-extension-target ext-target props)]))]
+        (recur (merge machfile exts) imports))
+      machfile)))
 
 (defn- write-classpath [cp-file cp-hash-file deps]
   (println "Writing Mach classpath to" cp-file)
@@ -371,112 +432,116 @@
                         #js {"flag" (bit-or constants.O_CREAT constants.O_SYNC constants.O_RDWR)}))))
 
 (defn- preprocess-dependencies [machfile]
-  (when-let [deps (or (get machfile 'mach/dependencies)
-                      ;; Deprecated
-                      (get machfile 'mach/m2))]
-    (ensure-mach-dir-exists)
-    (let [cp-file ".mach/cp"
-          cp-hash-file ".mach/cp-hash"]
-      (when-not (and (fs.existsSync cp-hash-file)
-                     (= (hash deps) (reader/read-string (fs.readFileSync cp-hash-file "utf-8"))))
-        (write-classpath cp-file cp-hash-file deps))
-      (lumo.classpath/add! (clojure.string/split (str (fs.readFileSync cp-file)) ":"))))
-  machfile)
+  (go
+    (when-let [deps (or (get machfile 'mach/dependencies)
+                        ;; Deprecated
+                        (get machfile 'mach/m2))]
+      (ensure-mach-dir-exists)
+      (let [cp-file ".mach/cp"
+            cp-hash-file ".mach/cp-hash"]
+        (when-not (and (fs.existsSync cp-hash-file)
+                       (= (hash deps) (reader/read-string (fs.readFileSync cp-hash-file "utf-8"))))
+          (write-classpath cp-file cp-hash-file deps))
+        (lumo.classpath/add! (clojure.string/split (str (fs.readFileSync cp-file)) ":"))))
+    machfile))
 
 (defn- preprocess-classpath [machfile]
-  (when-let [cp (get machfile 'mach/classpath)]
-    (lumo.classpath/add! cp)))
+  (go
+    (when-let [cp (get machfile 'mach/classpath)]
+      (lumo.classpath/add! cp))))
 
 (defn- preprocess-props [machfile]
-  (if-let [props (get machfile 'mach/props)]
-    (let [syms (map first (partition 2 props))
-          vals (:value (cljs/eval repl/st `(let ~props
-                                             [~@syms])
-                                  identity))]
-      (assoc machfile 'mach/props (vec (mapcat vector syms vals))))
-    machfile))
+  (go
+    (if-let [props (get machfile 'mach/props)]
+      (let [syms (map first (partition 2 props))
+            code (-> `(let ~props
+                        [~@syms])
+                     (with-async-go))
+            vals (a/<! (code-eval code))]
+        (assoc machfile 'mach/props (vec (mapcat vector syms vals))))
+      machfile)))
 
 (defn- preprocess-requires
   "Ensure that the classpath has everything it needs, prior to targets being evaled"
   [machfile]
-  ;; Process mach requires
-  (when-let [requires (get machfile 'mach/require)]
-    (doseq [req requires]
-      (cljs/eval repl/st `(require '~req) identity)))
-  (postwalk (fn [x]
-              (cond (and (list? x) (= 'require (first x)))
-                    (do
-                      (lumo.repl/execute "text" (str x) true false nil 0)
-                      nil)
+  (go
+    (when-let [requires (get machfile 'mach/require)]
+      (doseq [req requires]
+        (code-eval `(require '~req))))
+    (postwalk (fn [x]
+                (cond (and (list? x) (= 'require (first x)))
+                      (do
+                        (lumo.repl/execute "text" (str x) true false nil 0)
+                        nil)
 
-                    ;; Auto require
-                    (and (symbol? x) (namespace x))
-                    (let [ns (symbol (namespace x))]
-                      (when-not (find-ns ns)
-                        (cljs/eval repl/st `(require '~ns) identity))
-                      x)
+                      ;; Auto require
+                      (and (symbol? x) (namespace x))
+                      (let [ns (symbol (namespace x))]
+                        (when-not (find-ns ns)
+                          (code-eval `(require '~ns)))
+                        x)
 
-                    :else x))
-            machfile))
+                      :else x))
+              machfile)))
 
 (defn- preprocess-resolve-refs [mach-config]
-  (postwalk (fn [x]
-              (if (instance? Reference x)
-                (get-in mach-config (:path x))
-                x))
-            mach-config))
+  (go
+    (postwalk (fn [x]
+                (if (instance? Reference x)
+                  (get-in mach-config (:path x))
+                  x))
+              mach-config)))
 
 (defn- preprocess-eval-product
   "product can be an expression, eval it."
   [mach-config]
-  (into {}
-        (for [[k m] mach-config]
-          [k (if-let [product (and (map? m) (get m 'product))]
-               (let [code (with-prop-bindings `(identity ~product) mach-config)
-                     {:keys [value error]} (cljs/eval repl/st code identity)]
-                 (when error
-                   (throw (js/Error. (str "Could not eval form " code ", got error: " error))))
-                 (assoc m 'product value))
-               m)])))
+  (go
+    (into {}
+          (for [[k m] mach-config]
+            [k (if-let [product (and (map? m) (get m 'product))]
+                 (let [code (with-prop-bindings `(identity ~product) mach-config)]
+                   (assoc m 'product (code-eval code)))
+                 m)]))))
 
 (defn preprocess [machfile]
-  (reduce #(or (%2 %1) %1) machfile [preprocess-dependencies
-                                     preprocess-classpath
-                                     preprocess-requires
-                                     preprocess-props
-                                     preprocess-import
-                                     preprocess-init
-                                     preprocess-resolve-refs
-                                     preprocess-eval-product]))
+  (go-loop [machfile machfile
+            [preprocessor & preprocessors] [preprocess-dependencies
+                                            preprocess-classpath
+                                            preprocess-requires
+                                            preprocess-props
+                                            preprocess-import
+                                            preprocess-init
+                                            preprocess-resolve-refs
+                                            preprocess-eval-product]]
+    (if preprocessor
+      (recur (or (a/<! (preprocessor machfile)) machfile) preprocessors)
+      machfile)))
 
 (defn mach [{:keys [file tasks constant]
              :or {file "Machfile.edn"
                   tasks '[default]
                   constant {}}}]
-  (let [machfile (-> file
-                     (fs.readFileSync "utf-8")
-                     reader/read-string
-                     (update 'mach/constant merge constant)
-                     preprocess)]
-    (try
-      (binding [cljs/*eval-fn* repl/caching-node-eval]
-        (when-not (->> tasks
-                       (mapcat (partial expand-out-target-and-verbs machfile))
-                       (reduce (fn [m target-verb]
-                                 (if (contains? m target-verb)
-                                   (println (str "mach: '" (if-let [verb (second target-verb)]
-                                                             (str (first target-verb) ":" verb) (first target-verb))
-                                                 "' is up to date."))
-                                   (let [build-plan (build-plan machfile target-verb)]
-                                     (merge m (execute-plan machfile build-plan))))) {})
-                       (vals)
-                       (some identity))
-          (println "Nothing to do!")))
 
-      (catch :default e
-        (if-let [message (.-message e)]
-          (println message)
-          (println "Error:" e))))))
+  (go
+    (let [machfile (a/<! (-> file
+                             (fs.readFileSync "utf-8")
+                             reader/read-string
+                             (update 'mach/constant merge constant)
+                             preprocess))]
+
+      ;; TODO review exception handling and test it
+      (try
+        (let [results (a/<! (->> tasks
+                                 (mapcat (partial expand-out-target-and-verbs machfile))
+                                 (execute-plan-async machfile)))]
+          (when-not (->> results
+                         (vals)
+                         (some identity))
+            (println "Nothing to do!")))
+        (catch :default e
+          (if-let [message (.-message e)]
+            (println message)
+            (println "Error:" e)))))))
 
 (defn- dissoc-nil
   "Remove keys if they are nil"

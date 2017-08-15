@@ -40,3 +40,19 @@ not yet possible to specify verbs via a depends declaration.
 
 - If the target on the command line doesn't match a target, an attempt
   is made to match on a target's product filename.
+
+== [1.4.2]
+
+- Upgraded to Lumo 1.5
+
+- Output better error message when mach/dependencies fails
+
+- Rewrite argument parsing
+
+== [1.4.3]
+
+- `product` can be an eval'ed form and use `mach/props`
+
+- Fixes #36, simpler auto-requires rule
+
+- When determining dependencies, omit current Boot script.

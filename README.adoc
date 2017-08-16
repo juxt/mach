@@ -28,10 +28,10 @@ likely to change in the near future.
 Install Mach with NPM like this
 
 ....
-$ sudo npm install -g @juxt/mach lumo-cljs
+$ sudo npm install -g @juxt/mach
 ....
 
-Mach depends on https://github.com/anmonteiro/lumo[Lumo] 1.4.0.
+Mach ships with https://github.com/anmonteiro/lumo[Lumo] 1.5.0.
 
 == Getting started
 

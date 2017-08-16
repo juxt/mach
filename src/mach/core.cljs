@@ -445,6 +445,17 @@
         (lumo.classpath/add! (clojure.string/split (str (fs.readFileSync cp-file)) ":"))))
     machfile))
 
+(defn- preprocess-npm [machfile]
+  (go
+    (doseq [[package version] (get machfile 'mach/npm)
+            :when (not (= version (try (.-version (nodejs/require (str package "/package.json")))
+                                       (catch :default e))))]
+      (println "npm installing" package version)
+      (.spawnSync child_process
+                  "npm"
+                  ["install" (str package "@" version)]
+                  #js {"shell" true}))))
+
 (defn- preprocess-classpath [machfile]
   (go
     (when-let [cp (get machfile 'mach/classpath)]
@@ -475,7 +486,7 @@
                         nil)
 
                       ;; Auto require
-                      (and (symbol? x) (namespace x))
+                      (and (symbol? x) (namespace x) (not= "js" (namespace x)))
                       (let [ns (symbol (namespace x))]
                         (when-not (find-ns ns)
                           (code-eval `(require '~ns)))
@@ -506,6 +517,7 @@
 (defn preprocess [machfile]
   (go-loop [machfile machfile
             [preprocessor & preprocessors] [preprocess-dependencies
+                                            preprocess-npm
                                             preprocess-classpath
                                             preprocess-requires
                                             preprocess-props

@@ -1,0 +1,9 @@
+{mach/npm [["request" "2.81.0"]]
+
+ mach/init (def request (js/require "request"))
+
+ foo (let [c (cljs.core.async/chan)]
+       (request "http://www.google.com" (fn [error response body]
+                                          (cljs.core.async.macros/go
+                                            (cljs.core.async/>! c (.-statusCode response)))))
+       (println "Got" (cljs.core.async/<! c)))}

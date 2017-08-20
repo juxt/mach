@@ -31,7 +31,7 @@ Install Mach with NPM like this
 $ sudo npm install -g @juxt/mach
 ....
 
-Mach ships with https://github.com/anmonteiro/lumo[Lumo] 1.5.0.
+Mach ships with https://github.com/anmonteiro/lumo[Lumo] 1.6.0.
 
 == Getting started
 

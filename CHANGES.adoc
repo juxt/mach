@@ -45,7 +45,7 @@ not yet possible to specify verbs via a depends declaration.
 
 - Upgraded to Lumo 1.5
 
-- Output better error message when mach/dependencies fails
+- Output better error message when `mach/dependencies` fails
 
 - Rewrite argument parsing
 
@@ -60,3 +60,5 @@ not yet possible to specify verbs via a depends declaration.
 == [1.4.4]
 
 - Mach code blocks are `core.async` go loops.
+
+- npm dependencies specified and installed by `mach/npm` directive.

@@ -1,0 +1,4 @@
+{mach/npm [["left-pad" "1.1.3"]]
+ mach/props [lp (js/require "left-pad")]
+
+ pad-foo (println (lp "foo" 5))}

@@ -1,8 +1,4 @@
 {
- hello (println "Hello World!")
-
- hello2 #$ ["echo" "Hello" "World!"]
-
  target-dir {product "target"
              novelty (not (mach.core/file-exists? product))
              update! #$ ["mkdir" product]

@@ -415,10 +415,12 @@
 
 (defn- preprocess-import [machfile]
   (go-loop [machfile machfile [import & imports] (get machfile 'mach/import)]
-    (if-let [[extension props] import]
-      (let [exts (into {}
-                       (for [[ext-k ext-target] (a/<! (load-extension extension))]
-                         [ext-k (map-props-onto-extension-target ext-target props)]))]
+    (if-let [[extension props & opts] import]
+      (let [opts (apply hash-map opts)
+            exts (into {}
+                       (for [[k target] (a/<! (load-extension extension))
+                             :let [k (if (:as opts) (symbol (str (:as opts)) (str k)) k)]]
+                         [k (map-props-onto-extension-target target props)]))]
         (recur (merge machfile exts) imports))
       machfile)))
 

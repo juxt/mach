@@ -1,0 +1,10 @@
+{ps (let [ps-lines #$ ["ps" "--no-headers" "-eo" "comm,pcpu"]]
+      (->> (clojure.string/split ps-lines #"\n")
+           (map (fn [ps]
+                  (let [[comm pcpu] (clojure.string/split ps #"\s+")]
+                    {comm (js/parseInt pcpu)})))
+           (apply merge-with +)
+           (sort-by val)
+           (reverse)
+           (take 5)
+           (clojure.pprint/pprint)))}

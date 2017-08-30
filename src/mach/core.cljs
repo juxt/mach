@@ -229,18 +229,6 @@
                 (get props v v) v))
             target))
 
-(defn import [[target args]]
-  (go
-    (let [[extension k] (str/split (str target) "/")]
-      (-> (a/<! (load-extension extension))
-          (-> (get (symbol k))
-              (map-props-onto-extension-target args))))))
-
-(defn import-tag [v]
-  `(cljs.core.async/<!) (import ~v))
-
-(reader/register-tag-parser! "import" import-tag)
-
 (defmulti apply-verb
   "Return boolean to indicate if work was done (true) or not (false)"
   (fn [machfile [target-name target] verb] verb))
@@ -415,10 +403,19 @@
 
 (defn- preprocess-import [machfile]
   (go-loop [machfile machfile [import & imports] (get machfile 'mach/import)]
-    (if-let [[extension props] import]
-      (let [exts (into {}
-                       (for [[ext-k ext-target] (a/<! (load-extension extension))]
-                         [ext-k (map-props-onto-extension-target ext-target props)]))]
+    (if-let [[extension props & opts] import]
+      (let [opts (apply hash-map opts)
+            exts (into {}
+                       (for [[k target] (a/<! (load-extension extension))
+                             :let [k (cond (:as opts)
+                                           (symbol (str (:as opts)) (str k))
+
+                                           (:rename opts)
+                                           (get (:rename opts) k k)
+
+                                           :default
+                                           k)]]
+                         [k (map-props-onto-extension-target target props)]))]
         (recur (merge machfile exts) imports))
       machfile)))
 

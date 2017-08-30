@@ -1,0 +1,11 @@
+{xml {source "doc.adoc"
+      product "doc.xml"
+      backend "docbook5"
+      novelty (mach.core/modified-since product (filter (mach.core/has-suffix ".adoc") (mach.core/files)))
+      update! #$ ["asciidoctor" "-b" backend source "-o" product]}
+
+ pdf {product "doc.pdf"
+      depends [xml]
+      novelty (mach.core/modified-since product [#ref [xml product] "style/custom.sty" "style/dblatex-custom.xsl"])
+      update! #$ ["dblatex" "-d" "-s" "style/custom.sty" "-p" "style/dblatex-custom.xsl" "-b" "xetex" "--tmpdir=target/xetex" #ref [xml product]]
+      clean! #$ ["rm" "-rf" "target/xetex" product]}}

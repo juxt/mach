@@ -2,3 +2,5 @@ target/
 /npm-debug.log
 node_modules/
 .mach
+/examples/pdf/doc.pdf
+/examples/pdf/doc.xml

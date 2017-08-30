@@ -136,8 +136,10 @@
 (reader/register-tag-parser! "$" read-shell)
 
 (defn ^:private read-shell-apply [vals]
-  `(when (not-empty ~vals) (sh (concat (drop-last ~vals)
-                                       (last ~vals)))))
+  `(when (not-empty ~vals)
+     (cljs.core.async/<!
+      (sh (concat (drop-last ~vals)
+                  (last ~vals))))))
 
 (reader/register-tag-parser! "$$" read-shell-apply)
 

@@ -107,32 +107,39 @@
                                        (mapcat mach.core/file-seq source)
                                        (mach.core/file-seq source)))))
 
-(defn sh [& args]
-  ;; TODO check code and barf if non-zero?
-  (go
-    (let [args (flatten args)
-          _ (apply println "$" args)
-          b (atom (js/Buffer.alloc 10))
-          cp (.spawn child_process
-                     (first args)
-                     (clj->js (rest args))
-                     #js {"shell" true})
-          c (a/chan)]
-      (.on (.-stdout cp) "data"
-           (fn [d]
-             (.write (.-stdout process) d)
-             (swap! b #(js/Buffer.concat (clj->js [% d])))))
-      (.on (.-stderr cp) "data" (fn [d] (.write (.-stderr process) d)))
-      (.on cp "close" (fn [d] (go (a/>! c (.trim (.toString @b))))))
-      (a/<! c))))
+(defn sh
+  ([args]
+   (sh args {}))
+  ([args {:keys [quiet] :as opts}]
+   ;; TODO check code and barf if non-zero?
+   (go
+     (let [args (flatten args)
+           _ (apply println "$" args)
+           b (atom (js/Buffer.alloc 10))
+           cp (.spawn child_process
+                      (first args)
+                      (clj->js (rest args))
+                      #js {"shell" true})
+           c (a/chan)]
+       (.on (.-stdout cp) "data"
+            (fn [d]
+              (when-not quiet
+                (.write (.-stdout process) d))
+              (swap! b #(js/Buffer.concat (clj->js [% d])))))
+       (.on (.-stderr cp) "data" (fn [d] (.write (.-stderr process) d)))
+       (.on cp "close" (fn [d] (go (a/>! c (.trim (.toString @b))))))
+       (a/<! c)))))
 
 (defn ^:private read-shell [vals]
-  `(cljs.core.async/<! (sh ~@vals)))
+  `(cljs.core.async/<! (sh ~vals)))
 
 (reader/register-tag-parser! "$" read-shell)
 
 (defn ^:private read-shell-apply [vals]
-  `(when (not-empty ~vals) (apply sh ~@vals)))
+  `(when (not-empty ~vals)
+     (cljs.core.async/<!
+      (sh (concat (drop-last ~vals)
+                  (last ~vals))))))
 
 (reader/register-tag-parser! "$$" read-shell-apply)
 
@@ -310,12 +317,10 @@
       ;; Otherwise implied policy is to delete declared target files
       (when-let [product (get target 'product)]
         (if (coll? product)
-          (if (some dir? product)
-            (apply sh "rm" "-rf" product)
-            (apply sh "rm" "-f" product))
+          (sh (concat ["rm" (if (some dir? product) "-rf" "-f")] product))
           (cond
-            (dir? product) (sh "rm" "-rf" product)
-            (file-exists? product) (sh "rm" "-f" product)
+            (dir? product) (sh ["rm" "-rf" product])
+            (file-exists? product) (sh ["rm" "-f" product])
             ;; er? this is overridden later
             :otherwise false))))
     true))

@@ -62,3 +62,13 @@ not yet possible to specify verbs via a depends declaration.
 - Mach code blocks are `core.async` go loops.
 
 - npm dependencies specified and installed by `mach/npm` directive.
+
+== [1.4.5]
+
+- #28 Can suppress shell output
+
+- Fixes to documentation and examples
+
+- Ability to namespace imports
+
+- Ability to name tasks within imports

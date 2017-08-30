@@ -307,53 +307,48 @@ Mach extensions allow us to create reusable tasks, using the
 [source,clojure]
 ----
 {
-mach/import [["https://raw.githubusercontent.com/juxt/mach/master/extensions/aws.mach.edn" {profile "kermit"}]
-             ["https://raw.githubusercontent.com/juxt/mach/master/extensions/terraform.mach.edn"
-              {aws-profile "kermit" bucket "some-bucket" configs []}]]
+mach/import [["https://raw.githubusercontent.com/juxt/mach/master/extensions/aws.mach.edn" {profile "some-profile"}]]
 }
 ----
 
-Importing the Terraform extension as above adds to Mach standard Terraform targets such as 'plan' and 'apply', that can then simply be executed from the command line, i.e. `mach plan`.
+Importing the AWS extension as above adds to Mach AWS utility targets such as 'ips' which  lists the IPs of running EC2 instances. To execute this imported task, simply: `mach ips`.
 
-For more examples of extensions, checkout the https://github.com/juxt/roll[Roll] link:extensions/roll.mach.edn[extension] for Blue/Green Terraform application deployments.
+For more examples of extensions, checkout the link:extensions/aws.mach.edn[AWS extension] for AWS utility tasks.
 
-=== Import literal
-
-The the `mach/import` directive imports all targets from the extension. If you want more fine grained control, use the `#import` tag literal. For example:
+==== Aliasing Extensions
 
 [source,clojure]
 ----
 {
-tar #import [foo/bar {}]
+mach/import [["https://raw.githubusercontent.com/juxt/mach/master/extensions/aws.mach.edn" {profile "some-profile"} :as aws]]
 }
 ----
 
-In this case Mach will search this current directory - and also parent directories - for an extension file called foo.mach.edn. Once the extensions file is found Mach will load the extension targets.
+The above will import all tasks under the namespace aws. From the command line you would now execute `mach aws/ips`.
 
-If foo.mach.edn contained:
+You can also rename tasks when importing:
 
 [source,clojure]
 ----
-{bar #$ ["echo" "hello"]}
+{
+mach/import [["https://raw.githubusercontent.com/juxt/mach/master/extensions/aws.mach.edn" {profile "some-profile"} :rename ips ips2]]
+}
 ----
 
-Then the target 'bar' in the extension file will be aliased to 'tar' in the main Mach file. So running mach tar from the command line would echo hello.
+From the command line you would now execute `mach ips2`.
+
+==== Using local extension files
+
+[source,clojure]
+----
+{
+mach/import [[foo {}]]
+}
+----
+
+In this case Mach will search this current directory - and also parent directories - for an extension file called foo.mach.edn. Once the extensions file is found Mach will load the extension targets. `refer` and `rename` can also be used to change the namespace/symbol of the imported target respectively.
 
 Furthermore, any symbols in the target extension can be rewritten based on the supplied map of args. For example if the bar target was coded as such:
-
-[source,clojure]
-----
-{bar #$ ["echo" fido]}
-----
-
-And bar was imported as such:
-
-[source,clojure]
-----
-{tar #import [foo/bar {fido "greetings"}]}
-----
-
-then running mach tar from the command line would echo the string "greetings".
 
 == Acknowledgements
 

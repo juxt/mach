@@ -1,3 +1,7 @@
-{config (aero.core/read-config "config.edn" {})
- mach/dependencies [[aero "1.1.2"]]
- mach/import [["https://raw.githubusercontent.com/juxt/mach/master/extensions/aws.mach.edn" {aws-profile (:aws-profile #ref [config])}]]}
+{mach/dependencies [[aero "1.1.2"]]
+ mach/props [config (aero.core/read-config "config.edn" {})]
+
+ info (clojure.pprint/pprint config)
+
+ ;; Do things with our config
+ }

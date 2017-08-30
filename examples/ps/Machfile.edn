@@ -1,4 +1,4 @@
-{ps (let [ps-lines #$ ["ps" "--no-headers" "-eo" "comm,pcpu"]]
+{ps (let [ps-lines (<! (mach.core/sh ["ps" "--no-headers" "-eo" "comm,pcpu"] {:quiet true}))]
       (->> (clojure.string/split ps-lines #"\n")
            (map (fn [ps]
                   (let [[comm pcpu] (clojure.string/split ps #"\s+")]

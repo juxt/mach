@@ -1,5 +1,4 @@
-{
- target-dir {product "target"
+{target-dir {product "target"
              novelty (not (mach.core/file-exists? product))
              update! #$ ["mkdir" product]
              clean!  #$ ["rmdir" product]}
@@ -21,7 +20,7 @@
  css {product "target/app.css"
       depends [target-dir]
       novelty (mach.core/modified-since product #ref [sass dir])
-      update! (apply mach.core/sh (concat ["sassc"] novelty [">" product]))}
+      update! (mach.core/sh (concat ["sassc"] novelty [">" product]))}
 
  jar {product "target/foo.jar"
       depends [target-dir classes css]
@@ -34,7 +33,4 @@
                 #ref [css product]))
       update! (if (mach.core/file-exists? product)
                 #$$ ["jar uf" product novelty]
-                #$ ["jar cf" product #ref [classes-dir product]])}
-
-;; clean {depends [jar:clean]}
- }
+                #$ ["jar cf" product #ref [classes-dir product]])}}

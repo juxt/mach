@@ -1,0 +1,4 @@
+{repl (do
+        (println "Entering finished")
+        #$ ["lumo"]
+        (println "REPL finished"))}

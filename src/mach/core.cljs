@@ -280,15 +280,15 @@
         ;; Call update!
         (when (or (true? novelty)
                   (and (seq? novelty) (not-empty novelty)))
-          (update! machfile (assoc target 'novelty `(quote ~novelty)))))
+          (<! (update! machfile (assoc target 'novelty `(quote ~novelty))))))
 
       ;; Target is an expr or there is no novelty, press on:
-      (update! machfile target))))
+      (<! (update! machfile target)))))
 
 ;; Run the update (or produce) and print, no deps
 (defmethod apply-verb 'update [machfile [target-name target] verg]
   (go
-    (update! machfile target)))
+    (<! (update! machfile target))))
 
 ;; Print the produce
 (defmethod apply-verb 'print [machfile [target-name target] verb]

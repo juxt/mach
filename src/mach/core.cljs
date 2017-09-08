@@ -8,13 +8,12 @@
    [cljs.pprint :as pprint]
    [cljs.reader :as reader]
    [cljs.js :as cljs]
-   [lumo.repl :as repl]
+   [lumo.repl]
    [lumo.classpath]
    [clojure.walk :refer [postwalk]]
    [clojure.string :as str]
    [cljs.core.async :as a])
-  (:require-macros [cljs.core.async.impl.ioc-macros :as ioc]
-                   [cljs.core.async.macros :refer [go go-loop]]))
+  (:require-macros [cljs.core.async.macros :refer [go go-loop]]))
 
 (defonce ^:private st (cljs/empty-state))
 
@@ -163,13 +162,12 @@
 
 (def ^:private extensions-cache (atom {}))
 
-(def ^{:doc "load-fn is not defined for async callbacks"}
-  load-fn cljs.js/*load-fn*)
+(def ^:private load-fn cljs.js/*load-fn*)
 
 (defn code-eval [code]
-  (binding [cljs/*eval-fn* repl/caching-node-eval
+  (binding [cljs/*eval-fn* lumo.repl/caching-node-eval
             cljs.js/*load-fn* load-fn]
-    (let [{:keys [value error] :as res} (cljs/eval repl/st code identity)]
+    (let [{:keys [value error] :as res} (cljs/eval lumo.repl/st code identity)]
       (if error
         (throw (js/Error. (str "Could not eval form " code ", got error: " error)))
         value))))

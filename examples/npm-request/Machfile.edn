@@ -1,12 +1,11 @@
 {mach/npm [["request" "2.81.0"]]
 
  mach/init (do
-             (require-macros '[cljs.core.async.macros :refer [go]])
              (require '[cljs.core.async :refer [<! >! chan]])
              (def request (js/require "request")))
 
  fetch (let [c (chan)]
          (request "http://www.google.com" (fn [error response body]
-                                            (go
+                                            (cljs.core.async.macros/go
                                               (>! c (.-statusCode response)))))
          (println "Got" (<! c)))}

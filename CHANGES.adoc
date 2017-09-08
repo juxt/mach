@@ -72,3 +72,7 @@ not yet possible to specify verbs via a depends declaration.
 - Ability to namespace imports
 
 - Ability to name tasks within imports
+
+== [1.4.6]
+
+- Upgrade to lumo 1.7.0

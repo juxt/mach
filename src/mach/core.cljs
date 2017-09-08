@@ -132,7 +132,7 @@
 (defn ^:private read-shell [vals]
   `(cljs.core.async/<! (sh ~vals)))
 
-(reader/register-tag-parser! "$" read-shell)
+(reader/register-tag-parser! '$ read-shell)
 
 (defn ^:private read-shell-apply [vals]
   `(when (not-empty ~vals)
@@ -140,25 +140,25 @@
       (sh (concat (drop-last ~vals)
                   (last ~vals))))))
 
-(reader/register-tag-parser! "$$" read-shell-apply)
+(reader/register-tag-parser! '$$ read-shell-apply)
 
 (defn add-classpath-path-to-sources [cp-file]
   (lumo.classpath/add! [cp-file])
   `[])
 
-(reader/register-tag-parser! "cp"  add-classpath-path-to-sources)
+(reader/register-tag-parser! 'cp  add-classpath-path-to-sources)
 
 (defn add-classpath-path-file-to-sources [cp-file]
   (lumo.classpath/add! (clojure.string/split (str (fs.readFileSync cp-file)) ":"))
   `[])
 
-(reader/register-tag-parser! "cpfile"  add-classpath-path-file-to-sources)
+(reader/register-tag-parser! 'cpfile  add-classpath-path-file-to-sources)
 
 (defn ^:private eval-cljs [cljs-file]
   (lumo.repl/execute "file" cljs-file true true nil 0)
   `[])
 
-(reader/register-tag-parser! "eval" eval-cljs)
+(reader/register-tag-parser! 'eval eval-cljs)
 
 (def ^:private extensions-cache (atom {}))
 

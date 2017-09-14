@@ -114,7 +114,7 @@
    (go
      (let [args (flatten args)
            _ (apply println "$" args)
-           b (atom (js/Buffer.alloc 10))
+           b (atom (js/Buffer.alloc 0))
            cp (.spawn child_process
                       (first args)
                       (clj->js (rest args))

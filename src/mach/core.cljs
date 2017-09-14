@@ -44,7 +44,7 @@
 (defn ^:private read-reference [path]
   (->Reference path))
 
-(reader/register-tag-parser! "ref" read-reference)
+(reader/register-tag-parser! 'ref read-reference)
 
 (def fs (nodejs/require "fs"))
 (def child_process (nodejs/require "child_process"))

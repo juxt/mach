@@ -1,1 +1,2 @@
-{test #$ ["lumo" "-c" "src:test" "-m" "mach.lumo-test"]}
+{test #$ ["lumo" "-c" "src:test" "-c" (clojure.string/join ":" (lumo.classpath/classpath))
+          "-m" "mach.lumo-test"]}

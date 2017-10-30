@@ -30,6 +30,10 @@ Install Mach with NPM like this
 $ sudo npm install -g @juxt/mach
 ....
 
+Mach uses `boot` to resolve dependencies mentioned in the Machfile, so
+you might want to install [`boot-clj`](https://github.com/boot-clj/boot)
+while your at it.
+
 Mach ships with https://github.com/anmonteiro/lumo[Lumo] 1.7.0.
 
 == Getting started

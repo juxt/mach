@@ -1,0 +1,25 @@
+[[sample]]
+== Some PDF with tweets
+
+Tweets:
+
+
+Here at #clojurex - amongst new and old friends.
+
+RT @jmglov: I like how @matluxian just referred to a Clojure map as a DSL. The power of data! #ClojureX
+
+Code duplication is another anti-pattern that was highlighted during my presentation today at #clojurex 2017 https://t.co/xFlDXrzrjF
+
+RT @skillsmatter: #ClojureX #SkillsCast: Revive the #clojure data science ecosystem through #OpenSource libraries! @elise_huard shows how h…
+
+Join @jasonbelldata in 10 mins in CTRL as he shows "How I Bled All Over Onyx." #ClojureX
+
+@rickesh17 #ClojureX
+
+RT @jr0cket: Do you really have big data or awkward-sized data? @elise_huard #ClojureX #ldnclj @skillsmatter https://t.co/IwNmG3kBX8
+
+Considering Clojure for your Startup? That was my main message of my presentation today at the #ClojureX 2017. https://t.co/EygHP0QQnV
+
+RT @jr0cket: A facinating book on Clojure for data science by @henrygarner #ClojureX #ldnclj @skil https://t.co/BiyRC040hN
+
+RT @jmglov: “Since we’re surrounded by devices, programming is literacy.” - @elise_huard #ClojureX https://t.co/FMt1zg9Inz

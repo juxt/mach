@@ -1,0 +1,32 @@
+{mach/dependencies [[aero "1.1.2"]]
+
+ mach/import [[pdf {}]]
+
+ mach/props [config (aero.core/read-config "config.edn" {})]
+
+ mach/init (do (require '[cljs.core.async :refer [<! >! chan timeout]])
+               (def twitter (js/require "twitter")))
+
+ tweets {product "tweets.edn"
+         produce (let [c (chan)]
+                   (.get (twitter. (clj->js (:twitter config)))
+                         "/search/tweets" (clj->js {:q "#clojurex"})
+                         (fn [error tweets response]
+                           (cljs.core.async.macros/go
+                             (>! c (:statuses (js->clj tweets :keywordize-keys true))))))
+                   (take 10 (<! c)))}
+
+ update-adoc (let [adoc (lumo.io/slurp "doc.adoc")
+                   tweets (cljs.tools.reader/read-string (lumo.io/slurp "tweets.edn"))]
+               (lumo.io/spit
+                "doc.adoc"
+                (str (lumo.io/slurp "predoc.adoc") "\n\n"
+                     (clojure.string/join "\n\n" (map :text tweets)))))
+
+ poll (let [c (chan)]
+        (loop []
+          (<! (timeout 5000))
+          #$ ["mach tweets update-adoc"]
+          (recur)))
+
+ watch #$ ["ls *.edn | entr mach pdf"]}

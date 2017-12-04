@@ -4,3 +4,6 @@ node_modules/
 .mach
 /examples/pdf/doc.pdf
 /examples/pdf/doc.xml
+/examples/poll-twitter/doc.pdf
+/examples/poll-twitter/doc.xml
+/examples/poll-twitter/tweets.edn

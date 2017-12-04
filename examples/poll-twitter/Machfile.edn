@@ -1,4 +1,5 @@
 {mach/dependencies [[aero "1.1.2"]]
+ mach/npm [["twitter" "1.7.1"]]
 
  mach/import [[pdf {}]]
 
